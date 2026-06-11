@@ -349,10 +349,11 @@ function init() {
   document.getElementById('loadingMsg').textContent = 'Se conectează la rețea...';
 
   const script = document.createElement('script');
-  script.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+  script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js';
   script.onload = () => {
     try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const SupabaseLib = window.supabase || window.Supabase;
+      supabase = SupabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY);
       document.getElementById('loadingMsg').style.display = 'none';
       listenForSignals();
     } catch(e) {
