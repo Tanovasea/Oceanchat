@@ -380,6 +380,7 @@ window.autoResize = (el) => { el.style.height='auto'; el.style.height=Math.min(e
 function showApp() {
   document.getElementById('splash').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
+  statusBar.style.display = 'none';
 }
 function setPeerInfo(id) {
   document.getElementById('peerAvatar').textContent = id[0];
