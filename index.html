@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>OceanChat</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -189,6 +194,13 @@ window.toggleDebug = function() {
 function genId() {
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ';
   return Array.from({length:4}, ()=>c[Math.floor(Math.random()*c.length)]).join('');
+}
+
+// Înregistrare Service Worker — face aplicația instalabilă și offline-capabilă
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then(() => dbg('Service Worker înregistrat — aplicația e salvată local'))
+    .catch((e) => dbg('Service Worker eroare: ' + e.message));
 }
 
 // INIT
