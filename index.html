@@ -106,6 +106,7 @@
         <span id="statusText">Se conectează...</span>
       </div>
     </div>
+    <button class="icon-btn" onclick="toggleDebug()" title="Debug">🔍</button>
     <button class="icon-btn" onclick="backToSplash()">✕</button>
   </div>
   <div id="messages">
@@ -117,6 +118,8 @@
     <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>➤</button>
   </div>
 </div>
+
+<div id="debugPanel" style="display:none;position:fixed;top:70px;left:0;right:0;bottom:60px;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:10px;overflow-y:auto;z-index:300;white-space:pre-wrap;"></div>
 
 <div id="connectModal">
   <div class="modal-box">
@@ -171,6 +174,18 @@ let peerId = null, pc = null, dataChannel = null, isInitiator = false;
 let pendingCandidates = [];
 let remoteDescSet = false;
 
+function dbg(msg) {
+  const panel = document.getElementById('debugPanel');
+  const time = new Date().toLocaleTimeString('ro');
+  panel.textContent += `[${time}] ${msg}\n`;
+  panel.scrollTop = panel.scrollHeight;
+  console.log(msg);
+}
+window.toggleDebug = function() {
+  const p = document.getElementById('debugPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+};
+
 function genId() {
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ';
   return Array.from({length:4}, ()=>c[Math.floor(Math.random()*c.length)]).join('');
@@ -183,14 +198,17 @@ listenForSignals();
 
 // SIGNALING
 function listenForSignals() {
+  dbg('Pornesc ascultarea pentru ID: ' + myId);
   supabase.channel('signals-' + myId)
     .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'signals',
       filter: 'to_peer=eq.' + myId
     }, async (payload) => {
+      dbg('SEMNAL PRIMIT de la ' + payload.new.from_peer + ' tip: ' + JSON.parse(payload.new.signal_data).type);
       await handleSignal(payload.new.from_peer, JSON.parse(payload.new.signal_data));
     })
     .subscribe((status) => {
+      dbg('Status subscripție: ' + status);
       if (status === 'SUBSCRIBED') {
         statusBar.textContent = '✅ Gata — ID-ul tău: ' + myId;
       } else {
@@ -200,10 +218,12 @@ function listenForSignals() {
 }
 
 async function sendSignal(to, data) {
+  dbg('Trimit semnal "' + data.type + '" catre ' + to);
   const {error} = await supabase.from('signals').insert({
     from_peer: myId, to_peer: to, signal_data: JSON.stringify(data)
   });
-  if (error) console.error('Signal error:', error);
+  if (error) dbg('EROARE trimitere: ' + JSON.stringify(error));
+  else dbg('Semnal trimis OK');
 }
 
 async function cleanSignals() {
@@ -213,10 +233,18 @@ async function cleanSignals() {
 // WEBRTC
 function createPC(remotePeerId) {
   pc = new RTCPeerConnection(STUN);
+  dbg('PeerConnection creat (initiator=' + isInitiator + ')');
   pc.onicecandidate = async (e) => {
-    if (e.candidate) await sendSignal(remotePeerId, {type:'candidate', candidate:e.candidate});
+    if (e.candidate) {
+      dbg('ICE candidate găsit (' + e.candidate.type + ')');
+      await sendSignal(remotePeerId, {type:'candidate', candidate:e.candidate});
+    } else {
+      dbg('ICE gathering complet');
+    }
   };
-  pc.onconnectionstatechange = () => updateStatus(pc.connectionState);
+  pc.onconnectionstatechange = () => { dbg('connectionState: ' + pc.connectionState); updateStatus(pc.connectionState); };
+  pc.oniceconnectionstatechange = () => dbg('iceConnectionState: ' + pc.iceConnectionState);
+  pc.onicegatheringstatechange = () => dbg('iceGatheringState: ' + pc.iceGatheringState);
   setTimeout(() => {
     if (pc && pc.connectionState !== 'connected') {
       addSystemMsg('⚠️ Conectarea durează mult. Verifică conexiunea la internet sau încearcă din nou.');
