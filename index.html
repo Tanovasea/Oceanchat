@@ -14,7 +14,7 @@
     --online:#00e676; --danger:#ff4757; --radius:14px;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow:hidden}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow:hidden;position:fixed;width:100%}
   #splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);gap:24px;z-index:100;transition:opacity .5s}
   #splash.hidden{opacity:0;pointer-events:none}
   .ocean-icon{width:80px;height:80px;position:relative}
@@ -35,7 +35,7 @@
   .my-id-label{font-size:11px;color:var(--text-dim);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase}
   .my-id-value{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--pulse);letter-spacing:3px}
   .my-id-hint{font-size:11px;color:var(--text-dim);margin-top:6px}
-  #app{display:none;flex-direction:column;height:100vh}
+  #app{display:none;flex-direction:column;height:100%;position:fixed;inset:0}
   #app.visible{display:flex}
   .app-header{display:flex;align-items:center;padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);gap:12px}
   .peer-avatar{width:38px;height:38px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--wave);flex-shrink:0}
