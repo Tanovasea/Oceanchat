@@ -264,6 +264,8 @@ async function checkPassword() {
 
     if (pass === data.value) {
       localStorage.setItem('ocean_auth', 'true');
+      document.getElementById('passError').style.color = 'lime';
+      document.getElementById('passError').textContent = 'OK! Se încarcă...';
       document.getElementById('passwordScreen').classList.add('hidden');
       initApp();
     } else {
