@@ -482,6 +482,56 @@ window.startCall=async function(){
   showCallOverlay('Se apelează...');
 };
 let pendingCallMsg = null;
+let ringInterval = null;
+
+// ── SUNET RING ───────────────────────────────────────────────
+let audioCtx = null;
+
+// Inițializăm AudioContext la prima atingere a ecranului
+document.addEventListener('touchstart', () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: false });
+
+document.addEventListener('click', () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: false });
+
+function playDringDring() {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const t = audioCtx.currentTime;
+  [0, 0.45].forEach(offset => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 400;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0, t + offset);
+    gain.gain.linearRampToValueAtTime(0.5, t + offset + 0.02);
+    gain.gain.setValueAtTime(0.5, t + offset + 0.3);
+    gain.gain.linearRampToValueAtTime(0, t + offset + 0.35);
+    osc.start(t + offset);
+    osc.stop(t + offset + 0.36);
+  });
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+}
+
+function startRing() {
+  stopRing();
+  playDringDring();
+  ringInterval = setInterval(playDringDring, 4000);
+}
+function stopRing() {
+  if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
+}
+// ─────────────────────────────────────────────────────────────
 
 async function handleIncomingCall(msg){
   pendingCallMsg = msg;
@@ -489,9 +539,11 @@ async function handleIncomingCall(msg){
   document.getElementById('incomingAvatar').textContent = name[0].toUpperCase();
   document.getElementById('incomingName').textContent = name;
   document.getElementById('incomingCall').classList.add('visible');
+  startRing();
 }
 
 window.acceptCall = async function(){
+  stopRing();
   document.getElementById('incomingCall').classList.remove('visible');
   if(!pendingCallMsg) return;
   const msg = pendingCallMsg; pendingCallMsg = null;
@@ -509,6 +561,7 @@ window.acceptCall = async function(){
 };
 
 window.rejectCall = function(){
+  stopRing();
   document.getElementById('incomingCall').classList.remove('visible');
   pendingCallMsg = null;
   if(dataChannel&&dataChannel.readyState==='open'){
@@ -535,6 +588,7 @@ function startCallTimer(){
   },1000);
 }
 window.endCall=function(fromRemote){
+  stopRing();
   if(!fromRemote&&dataChannel&&dataChannel.readyState==='open'){try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}}
   if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
   if(voicePc){voicePc.close();voicePc=null;}
@@ -561,6 +615,7 @@ window.sendMessage=function(){
   input.value='';input.style.height='auto';
 };
 function addMessage(text,isMine){
+  if(!isMine && navigator.vibrate) navigator.vibrate([60]);
   const msgs=document.getElementById('messages');
   const now=new Date().toLocaleTimeString('ro',{hour:'2-digit',minute:'2-digit'});
   const row=document.createElement('div');
