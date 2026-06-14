@@ -150,6 +150,7 @@
       onkeydown="if(event.key==='Enter') checkPassword()">
     <div class="pass-error" id="passError"></div>
     <button class="btn btn-primary" style="width:100%" onclick="checkPassword()">Intră</button>
+    <button class="btn btn-ghost" style="width:100%;font-size:12px;margin-top:-8px" onclick="generateHash()">🔧 Generează hash (pt. Supabase)</button>
   </div>
 </div>
 
@@ -295,6 +296,24 @@ function dbg(msg){
 }
 
 // ── PAROLA ───────────────────────────────────────────────────
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+window.generateHash = async function() {
+  const pass = document.getElementById('passInput').value.trim();
+  if (!pass) { document.getElementById('passError').textContent = 'Introdu parola mai întâi.'; return; }
+  const hash = await sha256(pass);
+  await navigator.clipboard.writeText(hash).catch(()=>{});
+  document.getElementById('passError').style.color = 'lime';
+  document.getElementById('passError').textContent = '✅ Hash copiat! Pune-l în Supabase.';
+  setTimeout(()=>{
+    document.getElementById('passError').style.color='';
+    document.getElementById('passError').textContent='';
+  }, 4000);
+};
+
 async function checkPassword() {
   const input=document.getElementById('passInput');
   const errorEl=document.getElementById('passError');
@@ -303,9 +322,10 @@ async function checkPassword() {
   errorEl.textContent='';
   input.disabled=true;
   try {
+    const hash = await sha256(pass);
     const {data,error}=await supabase.from('app_config').select('value').eq('key','access_password').single();
     if(error||!data){errorEl.textContent='Eroare: '+(error?error.message:'fără date');input.disabled=false;return;}
-    if(pass===data.value){
+    if(hash===data.value){
       localStorage.setItem('ocean_auth','true');
       document.getElementById('passwordScreen').classList.add('hidden');
       document.getElementById('splash').classList.remove('hidden');
