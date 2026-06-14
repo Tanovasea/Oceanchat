@@ -273,6 +273,7 @@ const statusBar = document.getElementById('status-bar');
 let myId, peerId=null, pc=null, dataChannel=null, isInitiator=false;
 let pendingCandidates=[], remoteDescSet=false;
 let localStream=null, voicePc=null, callTimerInterval=null, callSeconds=0, isMuted=false;
+let pendingCallMsg=null, ringInterval=null;
 
 // ── UTILITĂȚI ────────────────────────────────────────────────
 function genId() {
@@ -411,9 +412,23 @@ async function cleanSignals(){await supabase.from('signals').delete().eq('to_pee
 function createPC(remotePeerId){
   pc=new RTCPeerConnection(STUN);
   dbg('PC creat');
-  pc.onicecandidate=async(e)=>{if(e.candidate)await sendSignal(remotePeerId,{type:'candidate',candidate:e.candidate});};
+  pc.onicecandidate=async(e)=>{
+    if(e.candidate){
+      dbg('ICE candidate: '+e.candidate.type+' '+e.candidate.protocol+' '+(e.candidate.relatedAddress||''));
+      await sendSignal(remotePeerId,{type:'candidate',candidate:e.candidate});
+    } else {
+      dbg('ICE gathering complet');
+    }
+  };
   pc.onconnectionstatechange=()=>{dbg('connState: '+pc.connectionState);updateStatus(pc.connectionState);};
   pc.oniceconnectionstatechange=()=>dbg('iceState: '+pc.iceConnectionState);
+  // Ascultăm track-uri audio incoming (pentru apel vocal pe același pc)
+  pc.ontrack=(e)=>{
+    dbg('Track primit: '+e.track.kind);
+    if(e.track.kind==='audio'){
+      document.getElementById('remoteAudio').srcObject=e.streams[0];
+    }
+  };
   setTimeout(()=>{if(pc&&pc.connectionState!=='connected')addSystemMsg('⚠️ Conexiunea durează mult. Încearcă din nou.');},10000);
   if(isInitiator){dataChannel=pc.createDataChannel('chat',{ordered:true});setupChannel(dataChannel);}
   else{pc.ondatachannel=(e)=>{dataChannel=e.channel;setupChannel(dataChannel);};}
@@ -436,8 +451,15 @@ function setupChannel(ch){
     try{
       const msg=JSON.parse(e.data);
       if(msg.__type==='call_offer'){await handleIncomingCall(msg);return;}
-      if(msg.__type==='call_answer'){if(voicePc)await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));document.getElementById('callStatus').textContent='Conectat';startCallTimer();return;}
-      if(msg.__type==='call_candidate'){if(voicePc)try{await voicePc.addIceCandidate(new RTCIceCandidate(msg.candidate));}catch(err){}return;}
+      if(msg.__type==='call_accept'){
+        // Celălalt a acceptat — setăm answer-ul pe pc-ul principal
+        if(pc&&pc.signalingState!=='stable'){
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        }
+        document.getElementById('callStatus').textContent='Conectat';
+        startCallTimer();
+        return;
+      }
       if(msg.__type==='call_end'){endCall(true);return;}
     }catch(err){}
     addMessage(e.data,false);
@@ -460,6 +482,11 @@ async function handleSignal(fromPeer,signal){
   }else if(signal.type==='candidate'){
     if(remoteDescSet&&pc){try{await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));}catch(e){}}
     else{pendingCandidates.push(signal.candidate);}
+  }else if(signal.type==='call_accept'){
+    // Celălalt a acceptat — renegociem cu audio
+    if(pc&&pc.signalingState!=='stable'){
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+    }
   }
 }
 async function flushCandidates(){
@@ -467,22 +494,54 @@ async function flushCandidates(){
   pendingCandidates=[];
 }
 
-// ── APEL VOCAL ───────────────────────────────────────────────
+// ── APEL VOCAL (pe același pc) ───────────────────────────────
 window.startCall=async function(){
   if(!dataChannel||dataChannel.readyState!=='open')return;
   try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
   catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
-  voicePc=new RTCPeerConnection(STUN);
-  localStream.getTracks().forEach(t=>voicePc.addTrack(t,localStream));
-  voicePc.ontrack=(e)=>{document.getElementById('remoteAudio').srcObject=e.streams[0];};
-  voicePc.onicecandidate=(e)=>{if(e.candidate)dataChannel.send(JSON.stringify({__type:'call_candidate',candidate:e.candidate}));};
-  const offer=await voicePc.createOffer();
-  await voicePc.setLocalDescription(offer);
-  dataChannel.send(JSON.stringify({__type:'call_offer',sdp:voicePc.localDescription}));
+  // Adăugăm track-ul audio pe pc-ul existent
+  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  // Renegociem conexiunea cu audio inclus
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  dataChannel.send(JSON.stringify({__type:'call_offer',sdp:pc.localDescription}));
   showCallOverlay('Se apelează...');
 };
-let pendingCallMsg = null;
-let ringInterval = null;
+
+async function handleIncomingCall(msg){
+  pendingCallMsg=msg;
+  const name=document.getElementById('peerName').textContent;
+  document.getElementById('incomingAvatar').textContent=name[0].toUpperCase();
+  document.getElementById('incomingName').textContent=name;
+  document.getElementById('incomingCall').classList.add('visible');
+  startRing();
+}
+
+window.acceptCall=async function(){
+  stopRing();
+  document.getElementById('incomingCall').classList.remove('visible');
+  if(!pendingCallMsg)return;
+  const msg=pendingCallMsg;pendingCallMsg=null;
+  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
+  // Adăugăm track-ul audio pe pc-ul existent și renegociem
+  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+  const answer=await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  // Trimitem answer prin dataChannel
+  dataChannel.send(JSON.stringify({__type:'call_accept',sdp:pc.localDescription}));
+  showCallOverlay('Conectat');startCallTimer();
+};
+
+window.rejectCall=function(){
+  stopRing();
+  document.getElementById('incomingCall').classList.remove('visible');
+  pendingCallMsg=null;
+  if(dataChannel&&dataChannel.readyState==='open'){
+    try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}
+  }
+};
 
 // ── SUNET RING ───────────────────────────────────────────────
 let audioCtx = null;
@@ -533,41 +592,6 @@ function stopRing() {
 }
 // ─────────────────────────────────────────────────────────────
 
-async function handleIncomingCall(msg){
-  pendingCallMsg = msg;
-  const name = document.getElementById('peerName').textContent;
-  document.getElementById('incomingAvatar').textContent = name[0].toUpperCase();
-  document.getElementById('incomingName').textContent = name;
-  document.getElementById('incomingCall').classList.add('visible');
-  startRing();
-}
-
-window.acceptCall = async function(){
-  stopRing();
-  document.getElementById('incomingCall').classList.remove('visible');
-  if(!pendingCallMsg) return;
-  const msg = pendingCallMsg; pendingCallMsg = null;
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
-  voicePc=new RTCPeerConnection(STUN);
-  localStream.getTracks().forEach(t=>voicePc.addTrack(t,localStream));
-  voicePc.ontrack=(e)=>{document.getElementById('remoteAudio').srcObject=e.streams[0];};
-  voicePc.onicecandidate=(e)=>{if(e.candidate)dataChannel.send(JSON.stringify({__type:'call_candidate',candidate:e.candidate}));};
-  await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-  const answer=await voicePc.createAnswer();
-  await voicePc.setLocalDescription(answer);
-  dataChannel.send(JSON.stringify({__type:'call_answer',sdp:voicePc.localDescription}));
-  showCallOverlay('Conectat');startCallTimer();
-};
-
-window.rejectCall = function(){
-  stopRing();
-  document.getElementById('incomingCall').classList.remove('visible');
-  pendingCallMsg = null;
-  if(dataChannel&&dataChannel.readyState==='open'){
-    try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}
-  }
-};
 function showCallOverlay(status){
   const name=document.getElementById('peerName').textContent;
   document.getElementById('callAvatar').textContent=name[0].toUpperCase();
@@ -590,8 +614,10 @@ function startCallTimer(){
 window.endCall=function(fromRemote){
   stopRing();
   if(!fromRemote&&dataChannel&&dataChannel.readyState==='open'){try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}}
-  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
-  if(voicePc){voicePc.close();voicePc=null;}
+  if(localStream){
+    localStream.getTracks().forEach(t=>{t.stop();try{pc&&pc.getSenders().forEach(s=>{if(s.track===t)pc.removeTrack(s);});}catch(e){}});
+    localStream=null;
+  }
   if(callTimerInterval){clearInterval(callTimerInterval);callTimerInterval=null;}
   isMuted=false;pendingCallMsg=null;
   document.getElementById('callOverlay').classList.remove('visible');
