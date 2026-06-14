@@ -90,6 +90,23 @@
   .pass-input.error{border-color:var(--danger);animation:shake .3s ease}
   .pass-error{font-size:12px;color:var(--danger);text-align:center;min-height:16px}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  /* AGENDĂ */
+  #contactsModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:200;align-items:flex-end;justify-content:center;padding:0}
+  #contactsModal.visible{display:flex}
+  .contacts-box{background:var(--surface);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:14px}
+  .contacts-header{display:flex;align-items:center;justify-content:space-between}
+  .contacts-title{font-size:17px;font-weight:600}
+  .contacts-list{overflow-y:auto;display:flex;flex-direction:column;gap:8px;flex:1}
+  .contact-item{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border);cursor:pointer}
+  .contact-item:hover{border-color:var(--wave)}
+  .contact-avatar{width:36px;height:36px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--wave);flex-shrink:0}
+  .contact-info{flex:1;min-width:0}
+  .contact-name{font-size:14px;font-weight:500}
+  .contact-id{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+  .contact-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:4px}
+  .add-contact-form{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:14px}
+  .add-contact-row{display:flex;gap:8px}
+  .add-contact-row .input-field{font-size:14px;letter-spacing:1px;flex:1}
 </style>
 </head>
 <body>
@@ -120,8 +137,10 @@
     <div class="my-id-label">ID-ul tău</div>
     <div class="my-id-value" id="myIdDisplay">...</div>
     <div class="my-id-hint">Dă-l celui cu care vrei să vorbești</div>
+    <button class="btn btn-ghost" style="margin-top:10px;font-size:12px;padding:6px 16px" onclick="changeMyId()">🔄 Schimbă ID</button>
   </div>
   <button class="btn btn-primary" onclick="openConnectModal()">Conectează-te</button>
+  <button class="btn btn-ghost" onclick="openContacts()">📋 Agendă</button>
   <button class="btn btn-ghost" onclick="showWaiting()">Așteaptă conexiune</button>
 </div>
 
@@ -153,9 +172,9 @@
 <div id="connectModal">
   <div class="modal-box">
     <div class="modal-title">🔗 Conectează-te</div>
-    <div class="modal-sub">Introdu ID-ul persoanei (4 litere):</div>
+    <div class="modal-sub">Introdu ID-ul persoanei (2 litere):</div>
     <input type="text" class="input-field" id="targetIdInput"
-      placeholder="ex: ALFA" maxlength="4"
+      placeholder="ex: VA" maxlength="2"
       oninput="this.value=this.value.toUpperCase()">
     <div id="connectStatus" style="display:none" class="waiting-indicator">
       <div class="waiting-dot"></div><div class="waiting-dot"></div><div class="waiting-dot"></div>
@@ -169,6 +188,25 @@
 </div>
 
 <div id="status-bar">⏳ Se inițializează...</div>
+
+<!-- AGENDĂ MODAL -->
+<div id="contactsModal">
+  <div class="contacts-box">
+    <div class="contacts-header">
+      <div class="contacts-title">📋 Agendă</div>
+      <button class="icon-btn" onclick="closeContacts()">✕</button>
+    </div>
+    <div class="contacts-list" id="contactsList"></div>
+    <div class="add-contact-form">
+      <div style="font-size:12px;color:var(--text-dim)">Adaugă contact nou:</div>
+      <div class="add-contact-row">
+        <input type="text" class="input-field" id="newContactName" placeholder="Nume" style="letter-spacing:0;text-align:left">
+        <input type="text" class="input-field" id="newContactId" placeholder="ID" maxlength="2" oninput="this.value=this.value.toUpperCase()" style="max-width:70px">
+      </div>
+      <button class="btn btn-primary" onclick="addContact()">Adaugă</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -196,7 +234,7 @@ async function checkPassword() {
       .single();
 
     if (error || !data) {
-      errorEl.textContent = 'Eroare: ' + (error ? error.message : 'fără date');
+      errorEl.textContent = 'Eroare la verificare. Încearcă din nou.';
       input.disabled = false;
       return;
     }
@@ -251,7 +289,7 @@ const STUN = { iceServers:[
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const statusBar = document.getElementById('status-bar');
 
-let myId = genId();
+let myId = getMyId();
 let peerId = null, pc = null, dataChannel = null, isInitiator = false;
 let pendingCandidates = [];
 let remoteDescSet = false;
@@ -270,8 +308,81 @@ window.toggleDebug = function() {
 
 function genId() {
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return Array.from({length:4}, ()=>c[Math.floor(Math.random()*c.length)]).join('');
+  return Array.from({length:2}, ()=>c[Math.floor(Math.random()*c.length)]).join('');
 }
+
+// ID permanent în localStorage
+function getMyId() {
+  let id = localStorage.getItem('ocean_my_id');
+  if (!id) { id = genId(); localStorage.setItem('ocean_my_id', id); }
+  return id;
+}
+
+window.changeMyId = function() {
+  if (!confirm('Sigur vrei să schimbi ID-ul? Prietenii cu vechiul ID nu te vor mai găsi!')) return;
+  const newId = genId();
+  localStorage.setItem('ocean_my_id', newId);
+  myId = newId;
+  document.getElementById('myIdDisplay').textContent = myId;
+  statusBar.textContent = '✅ Gata — ID-ul tău: ' + myId;
+  listenForSignals();
+};
+
+// ── AGENDĂ ───────────────────────────────────────────────────
+function getContacts() {
+  return JSON.parse(localStorage.getItem('ocean_contacts') || '[]');
+}
+function saveContacts(list) {
+  localStorage.setItem('ocean_contacts', JSON.stringify(list));
+}
+function renderContacts() {
+  const list = getContacts();
+  const el = document.getElementById('contactsList');
+  if (list.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:16px">Niciun contact salvat</div>';
+    return;
+  }
+  el.innerHTML = list.map((c, i) => `
+    <div class="contact-item" onclick="connectToContact('${c.id}')">
+      <div class="contact-avatar">${c.name[0].toUpperCase()}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(c.name)}</div>
+        <div class="contact-id">ID: ${c.id}</div>
+      </div>
+      <button class="contact-del" onclick="event.stopPropagation();deleteContact(${i})" title="Șterge">🗑️</button>
+    </div>`).join('');
+}
+window.addContact = function() {
+  const name = document.getElementById('newContactName').value.trim();
+  const id = document.getElementById('newContactId').value.trim().toUpperCase();
+  if (!name || id.length !== 2) return;
+  const list = getContacts();
+  if (list.find(c => c.id === id)) { alert('ID-ul există deja în agendă!'); return; }
+  list.push({name, id});
+  saveContacts(list);
+  document.getElementById('newContactName').value = '';
+  document.getElementById('newContactId').value = '';
+  renderContacts();
+};
+window.deleteContact = function(i) {
+  const list = getContacts();
+  list.splice(i, 1);
+  saveContacts(list);
+  renderContacts();
+};
+window.connectToContact = function(id) {
+  closeContacts();
+  document.getElementById('targetIdInput').value = id;
+  openConnectModal();
+};
+window.openContacts = function() {
+  renderContacts();
+  document.getElementById('contactsModal').classList.add('visible');
+};
+window.closeContacts = function() {
+  document.getElementById('contactsModal').classList.remove('visible');
+};
+// ─────────────────────────────────────────────────────────────
 
 // Înregistrare Service Worker — face aplicația instalabilă și offline-capabilă
 if ('serviceWorker' in navigator) {
@@ -432,7 +543,7 @@ function esc(t) {
 // UI
 window.initiateConnection = async function() {
   const input = document.getElementById('targetIdInput').value.trim().toUpperCase();
-  if (input.length !== 4 || input === myId) {
+  if (input.length !== 2 || input === myId) {
     document.getElementById('targetIdInput').style.borderColor = 'var(--danger)'; return;
   }
   peerId = input; isInitiator = true;
@@ -472,8 +583,11 @@ function showApp() {
   statusBar.style.display = 'none';
 }
 function setPeerInfo(id) {
-  document.getElementById('peerAvatar').textContent = id[0];
-  document.getElementById('peerName').textContent = 'Peer ' + id;
+  const contacts = getContacts();
+  const contact = contacts.find(c => c.id === id);
+  const displayName = contact ? contact.name : 'Peer ' + id;
+  document.getElementById('peerAvatar').textContent = displayName[0].toUpperCase();
+  document.getElementById('peerName').textContent = displayName;
 }
 function showConnectStatus(text) {
   document.getElementById('connectStatus').style.display = 'flex';
