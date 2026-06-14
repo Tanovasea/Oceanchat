@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>OceanChat</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --bg:#0a0a0f; --surface:#13131a; --border:#1e1e2e;
+    --wave:#4f8ef7; --wave-dim:#1e3a6e; --pulse:#00e5ff;
+    --text:#e8e8f0; --text-dim:#6b6b8a;
+    --online:#00e676; --danger:#ff4757; --radius:14px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow:hidden;position:fixed;width:100%}
+
+  /* PASSWORD */
+  #passwordScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);gap:24px;z-index:500}
+  #passwordScreen.hidden{display:none}
+  .pass-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;width:100%;max-width:320px;display:flex;flex-direction:column;gap:20px;align-items:center}
+  .pass-icon{font-size:48px}
+  .pass-title{font-size:20px;font-weight:600;text-align:center}
+  .pass-sub{font-size:13px;color:var(--text-dim);text-align:center;line-height:1.5}
+  .pass-input{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;text-align:center;letter-spacing:2px;transition:border-color .2s}
+  .pass-input:focus{border-color:var(--wave)}
+  .pass-input.error{border-color:var(--danger);animation:shake .3s ease}
+  .pass-error{font-size:12px;color:var(--danger);text-align:center;min-height:16px}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+  /* SPLASH / AGENDĂ */
+  #splash{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);z-index:100;overflow:hidden}
+  #splash.hidden{display:none}
+  .splash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .splash-logo{font-size:22px;font-weight:600}
+  .splash-logo span{color:var(--wave)}
+  .my-id-chip{background:var(--wave-dim);border-radius:20px;padding:4px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--pulse);font-weight:500;cursor:pointer;border:1px solid var(--wave-dim);transition:all .2s}
+  .my-id-chip:hover{border-color:var(--wave)}
+  .splash-contacts{flex:1;overflow-y:auto;padding:16px}
+  .splash-contacts-title{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 20px;color:var(--text-dim);text-align:center}
+  .empty-state-icon{font-size:48px;opacity:.4}
+  .empty-state-text{font-size:14px;line-height:1.6}
+  .splash-fab{position:fixed;bottom:24px;right:20px;width:56px;height:56px;border-radius:50%;background:var(--wave);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 20px rgba(79,142,247,.4);transition:all .2s;z-index:110}
+
+  /* BUTOANE */
+  .btn{padding:12px 28px;border-radius:50px;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
+  .btn-primary{background:var(--wave);color:#fff}
+  .btn-primary:hover{filter:brightness(1.15)}
+  .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+  .btn-ghost:hover{border-color:var(--wave);color:var(--wave)}
+  .icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim)}
+
+  /* CONTACTE */
+  .contact-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;margin-bottom:8px}
+  .contact-item:hover{border-color:var(--wave)}
+  .contact-avatar{width:40px;height:40px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--wave);flex-shrink:0}
+  .contact-info{flex:1;min-width:0}
+  .contact-name{font-size:15px;font-weight:500}
+  .contact-id{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+  .contact-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;padding:4px}
+
+  /* CHAT APP */
+  #app{display:none;flex-direction:column;height:100%;position:fixed;inset:0;z-index:100}
+  #app.visible{display:flex}
+  .app-header{display:flex;align-items:center;padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);gap:12px}
+  .peer-avatar{width:38px;height:38px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--wave);flex-shrink:0}
+  .peer-info{flex:1;min-width:0}
+  .peer-name{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .peer-status{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:2px}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);transition:background .3s}
+  .status-dot.online{background:var(--online);box-shadow:0 0 6px var(--online)}
+  #messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
+  .msg-row{display:flex;align-items:flex-end;gap:8px}
+  .msg-row.mine{flex-direction:row-reverse}
+  .msg-bubble{max-width:75vw;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word;width:fit-content}
+  .msg-row.mine .msg-bubble{background:var(--wave);color:#fff;border-bottom-right-radius:4px}
+  .msg-row.theirs .msg-bubble{background:var(--surface);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+  .msg-time{font-size:10px;color:var(--text-dim);margin-bottom:4px;padding:0 4px}
+  .system-msg{text-align:center;font-size:11px;color:var(--text-dim);padding:6px 12px;background:var(--surface);border-radius:20px;margin:4px auto;max-width:280px}
+  .input-area{padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-end}
+  #msgInput{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:22px;padding:10px 16px;color:var(--text);font-family:inherit;font-size:14px;resize:none;max-height:120px;outline:none;transition:border-color .2s;line-height:1.4}
+  #msgInput:focus{border-color:var(--wave)}
+  #msgInput::placeholder{color:var(--text-dim)}
+  .send-btn{width:42px;height:42px;border-radius:50%;background:var(--wave);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:all .2s}
+  .send-btn:disabled{background:var(--wave-dim);cursor:not-allowed}
+
+  /* MODALS */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:200;align-items:center;justify-content:center;padding:20px}
+  .modal-overlay.visible{display:flex}
+  .modal-bottom{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:200;align-items:flex-end;justify-content:center}
+  .modal-bottom.visible{display:flex}
+  .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:16px}
+  .modal-box-bottom{background:var(--surface);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;display:flex;flex-direction:column;gap:14px}
+  .modal-title{font-size:18px;font-weight:600}
+  .modal-sub{font-size:13px;color:var(--text-dim);line-height:1.5}
+  .modal-header{display:flex;align-items:center;justify-content:space-between}
+  .input-field{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;text-align:center;outline:none;width:100%;text-transform:uppercase}
+  .input-field:focus{border-color:var(--wave)}
+  .modal-actions{display:flex;gap:10px}
+  .modal-actions .btn{flex:1}
+  .waiting-indicator{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);justify-content:center}
+  .waiting-dot{width:6px;height:6px;border-radius:50%;background:var(--wave);animation:blink 1.4s ease-in-out infinite}
+  .waiting-dot:nth-child(2){animation-delay:.2s}
+  .waiting-dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+  /* STATUS BAR */
+  #status-bar{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:11px;color:var(--text-dim);padding:4px;background:var(--surface);border-top:1px solid var(--border);z-index:50}
+
+  /* DEBUG */
+  #debugPanel{display:none;position:fixed;top:70px;left:0;right:0;bottom:60px;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:10px;overflow-y:auto;z-index:300;white-space:pre-wrap}
+
+  /* APEL VOCAL */
+  #callOverlay{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:32px}
+  #callOverlay.visible{display:flex}
+  .call-avatar{width:90px;height:90px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--wave);border:3px solid var(--wave);animation:callPulse 1.5s ease-in-out infinite}
+  @keyframes callPulse{0%,100%{box-shadow:0 0 0 0 rgba(79,142,247,.4)}50%{box-shadow:0 0 0 16px rgba(79,142,247,0)}}
+  .call-name{font-size:22px;font-weight:600}
+  .call-status{font-size:14px;color:var(--text-dim)}
+  .call-timer{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--pulse)}
+  .call-actions{display:flex;gap:24px}
+  .call-btn{width:64px;height:64px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;transition:all .2s}
+  .call-btn-end{background:var(--danger)}
+  .call-btn-mute{background:var(--surface);border:1px solid var(--border)}
+  .call-btn-mute.muted{background:var(--wave-dim);border-color:var(--wave)}
+  .call-btn-accept{background:var(--online)}
+  #incomingCall{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:450;flex-direction:column;align-items:center;justify-content:center;gap:32px}
+  #incomingCall.visible{display:flex}
+  .incoming-ring{width:90px;height:90px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--wave);border:3px solid var(--wave);animation:callPulse 1s ease-in-out infinite}
+  .incoming-label{font-size:13px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<!-- PAROLA -->
+<div id="passwordScreen">
+  <div class="pass-box">
+    <div class="pass-icon">🔐</div>
+    <div class="pass-title">OceanChat</div>
+    <div class="pass-sub">Introdu parola de acces</div>
+    <input type="password" class="pass-input" id="passInput"
+      placeholder="••••••••"
+      onkeydown="if(event.key==='Enter') checkPassword()">
+    <div class="pass-error" id="passError"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="checkPassword()">Intră</button>
+  </div>
+</div>
+
+<!-- SPLASH / AGENDĂ -->
+<div id="splash" class="hidden">
+  <div class="splash-header">
+    <div class="splash-logo">Ocean<span>Chat</span> 🌊</div>
+    <div class="my-id-chip" onclick="copyMyId()">ID: <span id="myIdDisplay">...</span></div>
+  </div>
+  <div class="splash-contacts">
+    <div class="splash-contacts-title">Contacte</div>
+    <div id="splashContactsList"></div>
+  </div>
+  <button class="splash-fab" onclick="openAddContact()">＋</button>
+</div>
+
+<!-- CHAT -->
+<div id="app">
+  <div class="app-header">
+    <div class="peer-avatar" id="peerAvatar">?</div>
+    <div class="peer-info">
+      <div class="peer-name" id="peerName">--</div>
+      <div class="peer-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Se conectează...</span>
+      </div>
+    </div>
+    <button class="icon-btn" onclick="toggleDebug()" title="Debug">🔍</button>
+    <button class="icon-btn" id="callBtn" onclick="startCall()" title="Apel vocal" disabled>🎙️</button>
+    <button class="icon-btn" onclick="backToSplash()">✕</button>
+  </div>
+  <div id="messages"></div>
+  <div class="input-area">
+    <textarea id="msgInput" placeholder="Scrie un mesaj..." rows="1"
+      onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>➤</button>
+  </div>
+</div>
+
+<!-- DEBUG -->
+<div id="debugPanel"></div>
+
+<!-- MODAL CONECTARE -->
+<div id="connectModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🔗 Conectează-te</div>
+    <div class="modal-sub">Introdu ID-ul persoanei (2 litere):</div>
+    <input type="text" class="input-field" id="targetIdInput"
+      placeholder="ex: VA" maxlength="2"
+      oninput="this.value=this.value.toUpperCase()">
+    <div id="connectStatus" style="display:none" class="waiting-indicator">
+      <div class="waiting-dot"></div><div class="waiting-dot"></div><div class="waiting-dot"></div>
+      <span id="connectStatusText">Se conectează...</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeConnectModal()">Anulează</button>
+      <button class="btn btn-primary" onclick="initiateConnection()">Conectează</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONTACT NOU -->
+<div id="contactsModal" class="modal-bottom">
+  <div class="modal-box-bottom">
+    <div class="modal-header">
+      <div class="modal-title">➕ Contact nou</div>
+      <button class="icon-btn" onclick="closeContacts()">✕</button>
+    </div>
+    <input type="text" class="input-field" id="newContactName"
+      placeholder="Nume" style="letter-spacing:0;text-align:left;font-size:15px">
+    <input type="text" class="input-field" id="newContactId"
+      placeholder="ID (2 litere)" maxlength="2"
+      oninput="this.value=this.value.toUpperCase()">
+    <button class="btn btn-primary" onclick="addContact()">Salvează</button>
+  </div>
+</div>
+
+<!-- APEL VOCAL -->
+<div id="callOverlay">
+  <div class="call-avatar" id="callAvatar">?</div>
+  <div class="call-name" id="callName">--</div>
+  <div class="call-status" id="callStatus">Se apelează...</div>
+  <div class="call-timer" id="callTimer" style="display:none">00:00</div>
+  <div class="call-actions">
+    <button class="call-btn call-btn-mute" id="muteBtn" onclick="toggleMute()">🎤</button>
+    <button class="call-btn call-btn-end" onclick="endCall(false)">📵</button>
+  </div>
+</div>
+
+<audio id="remoteAudio" autoplay style="display:none"></audio>
+<div id="status-bar">⏳ Se inițializează...</div>
+
+<!-- APEL INCOMING -->
+<div id="incomingCall">
+  <div class="incoming-ring" id="incomingAvatar">?</div>
+  <div class="call-name" id="incomingName">--</div>
+  <div class="incoming-label">Apel vocal incoming</div>
+  <div class="call-actions">
+    <button class="call-btn call-btn-end" onclick="rejectCall()">📵</button>
+    <button class="call-btn call-btn-accept" onclick="acceptCall()">📞</button>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://nkvffllrxofcusqgqzxv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rdmZmbGxyeG9mY3VzcWdxenh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDU2MzksImV4cCI6MjA5NjY4MTYzOX0.3H8inMp5wwrK5Ufan1Ir8Urb1FU_5iK9XWXQQ_iOUm4';
+const STUN = { iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'turn:global.relay.metered.ca:80',username:'ade9230fb334eafb3b689286',credential:'FuZudc/n97BNnqlI'},
+  {urls:'turn:global.relay.metered.ca:80?transport=tcp',username:'ade9230fb334eafb3b689286',credential:'FuZudc/n97BNnqlI'},
+  {urls:'turn:global.relay.metered.ca:443',username:'ade9230fb334eafb3b689286',credential:'FuZudc/n97BNnqlI'},
+  {urls:'turns:global.relay.metered.ca:443?transport=tcp',username:'ade9230fb334eafb3b689286',credential:'FuZudc/n97BNnqlI'}
+]};
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const statusBar = document.getElementById('status-bar');
+
+let myId, peerId=null, pc=null, dataChannel=null, isInitiator=false;
+let pendingCandidates=[], remoteDescSet=false;
+let localStream=null, voicePc=null, callTimerInterval=null, callSeconds=0, isMuted=false;
+
+// ── UTILITĂȚI ────────────────────────────────────────────────
+function genId() {
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return Array.from({length:2},()=>c[Math.floor(Math.random()*c.length)]).join('');
+}
+function getMyId() {
+  let id=localStorage.getItem('ocean_my_id');
+  if(!id){id=genId();localStorage.setItem('ocean_my_id',id);}
+  return id;
+}
+function getContacts(){return JSON.parse(localStorage.getItem('ocean_contacts')||'[]');}
+function saveContacts(l){localStorage.setItem('ocean_contacts',JSON.stringify(l));}
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function dbg(msg){
+  const p=document.getElementById('debugPanel');
+  p.textContent+=`[${new Date().toLocaleTimeString('ro')}] ${msg}\n`;
+  p.scrollTop=p.scrollHeight;
+}
+
+// ── PAROLA ───────────────────────────────────────────────────
+async function checkPassword() {
+  const input=document.getElementById('passInput');
+  const errorEl=document.getElementById('passError');
+  const pass=input.value.trim();
+  if(!pass) return;
+  errorEl.textContent='';
+  input.disabled=true;
+  try {
+    const {data,error}=await supabase.from('app_config').select('value').eq('key','access_password').single();
+    if(error||!data){errorEl.textContent='Eroare: '+(error?error.message:'fără date');input.disabled=false;return;}
+    if(pass===data.value){
+      localStorage.setItem('ocean_auth','true');
+      document.getElementById('passwordScreen').classList.add('hidden');
+      document.getElementById('splash').classList.remove('hidden');
+      initApp();
+    } else {
+      input.classList.add('error');
+      errorEl.textContent='Parolă incorectă.';
+      input.value='';input.disabled=false;
+      setTimeout(()=>input.classList.remove('error'),400);
+    }
+  } catch(e){errorEl.textContent='Eroare de rețea.';input.disabled=false;}
+}
+window.checkPassword=checkPassword;
+
+// ── INIT ─────────────────────────────────────────────────────
+function initApp() {
+  myId=getMyId();
+  document.getElementById('myIdDisplay').textContent=myId;
+  statusBar.textContent='✅ Gata — ID: '+myId;
+  renderSplashContacts();
+  listenForSignals();
+}
+
+// La reload dacă deja autentificat
+if(localStorage.getItem('ocean_auth')==='true'){
+  document.getElementById('passwordScreen').classList.add('hidden');
+  document.getElementById('splash').classList.remove('hidden');
+  initApp();
+}
+
+// ── AGENDĂ ───────────────────────────────────────────────────
+function renderSplashContacts(){
+  const list=getContacts();
+  const el=document.getElementById('splashContactsList');
+  if(list.length===0){
+    el.innerHTML=`<div class="empty-state"><div class="empty-state-icon">👥</div><div class="empty-state-text">Niciun contact încă.<br>Apasă <b>＋</b> pentru a adăuga.</div></div>`;
+    return;
+  }
+  el.innerHTML=list.map((c,i)=>`
+    <div class="contact-item" onclick="connectToContact('${c.id}')">
+      <div class="contact-avatar">${c.name[0].toUpperCase()}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(c.name)}</div>
+        <div class="contact-id">ID: ${c.id}</div>
+      </div>
+      <button class="contact-del" onclick="event.stopPropagation();deleteContact(${i})">🗑️</button>
+    </div>`).join('');
+}
+window.addContact=function(){
+  const name=document.getElementById('newContactName').value.trim();
+  const id=document.getElementById('newContactId').value.trim().toUpperCase();
+  if(!name||id.length!==2)return;
+  const list=getContacts();
+  if(list.find(c=>c.id===id)){alert('ID-ul există deja!');return;}
+  list.push({name,id});saveContacts(list);
+  document.getElementById('newContactName').value='';
+  document.getElementById('newContactId').value='';
+  closeContacts();renderSplashContacts();
+};
+window.deleteContact=function(i){
+  if(!confirm('Ștergi contactul?'))return;
+  const list=getContacts();list.splice(i,1);saveContacts(list);renderSplashContacts();
+};
+window.connectToContact=function(id){
+  document.getElementById('targetIdInput').value=id;
+  openConnectModal();
+};
+window.openAddContact=function(){
+  document.getElementById('newContactName').value='';
+  document.getElementById('newContactId').value='';
+  document.getElementById('contactsModal').classList.add('visible');
+};
+window.closeContacts=function(){document.getElementById('contactsModal').classList.remove('visible');};
+window.copyMyId=function(){
+  navigator.clipboard.writeText(myId).then(()=>{
+    const chip=document.querySelector('.my-id-chip');
+    const orig=chip.innerHTML;
+    chip.innerHTML='✅ Copiat!';
+    setTimeout(()=>{chip.innerHTML=orig;},1500);
+  }).catch(()=>alert('ID-ul tău: '+myId));
+};
+
+// ── SIGNALING ────────────────────────────────────────────────
+function listenForSignals(){
+  dbg('Ascult pentru ID: '+myId);
+  supabase.channel('signals-'+myId)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'signals',filter:'to_peer=eq.'+myId},
+      async(payload)=>{
+        dbg('Semnal primit de la '+payload.new.from_peer);
+        await handleSignal(payload.new.from_peer,JSON.parse(payload.new.signal_data));
+      })
+    .subscribe((status)=>{
+      dbg('Subscripție: '+status);
+      statusBar.textContent=status==='SUBSCRIBED'?'✅ Gata — ID: '+myId:'⏳ '+status;
+    });
+}
+async function sendSignal(to,data){
+  const {error}=await supabase.from('signals').insert({from_peer:myId,to_peer:to,signal_data:JSON.stringify(data)});
+  if(error)dbg('Eroare semnal: '+error.message);
+}
+async function cleanSignals(){await supabase.from('signals').delete().eq('to_peer',myId);}
+
+// ── WEBRTC ───────────────────────────────────────────────────
+function createPC(remotePeerId){
+  pc=new RTCPeerConnection(STUN);
+  dbg('PC creat');
+  pc.onicecandidate=async(e)=>{if(e.candidate)await sendSignal(remotePeerId,{type:'candidate',candidate:e.candidate});};
+  pc.onconnectionstatechange=()=>{dbg('connState: '+pc.connectionState);updateStatus(pc.connectionState);};
+  pc.oniceconnectionstatechange=()=>dbg('iceState: '+pc.iceConnectionState);
+  setTimeout(()=>{if(pc&&pc.connectionState!=='connected')addSystemMsg('⚠️ Conexiunea durează mult. Încearcă din nou.');},10000);
+  if(isInitiator){dataChannel=pc.createDataChannel('chat',{ordered:true});setupChannel(dataChannel);}
+  else{pc.ondatachannel=(e)=>{dataChannel=e.channel;setupChannel(dataChannel);};}
+}
+function setupChannel(ch){
+  ch.onopen=()=>{
+    updateStatus('connected');
+    document.getElementById('sendBtn').disabled=false;
+    document.getElementById('callBtn').disabled=false;
+    cleanSignals();
+  };
+  ch.onclose=()=>{
+    updateStatus('disconnected');
+    document.getElementById('sendBtn').disabled=true;
+    document.getElementById('callBtn').disabled=true;
+    addSystemMsg('🔌 Conexiunea s-a închis.');
+    endCall(true);
+  };
+  ch.onmessage=async(e)=>{
+    try{
+      const msg=JSON.parse(e.data);
+      if(msg.__type==='call_offer'){await handleIncomingCall(msg);return;}
+      if(msg.__type==='call_answer'){if(voicePc)await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));document.getElementById('callStatus').textContent='Conectat';startCallTimer();return;}
+      if(msg.__type==='call_candidate'){if(voicePc)try{await voicePc.addIceCandidate(new RTCIceCandidate(msg.candidate));}catch(err){}return;}
+      if(msg.__type==='call_end'){endCall(true);return;}
+    }catch(err){}
+    addMessage(e.data,false);
+  };
+}
+async function handleSignal(fromPeer,signal){
+  if(signal.type==='offer'){
+    peerId=fromPeer;isInitiator=false;pendingCandidates=[];remoteDescSet=false;
+    setPeerInfo(fromPeer);showApp();createPC(fromPeer);
+    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+    remoteDescSet=true;await flushCandidates();
+    const answer=await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await sendSignal(fromPeer,{type:'answer',sdp:pc.localDescription});
+  }else if(signal.type==='answer'){
+    if(pc&&pc.signalingState!=='stable'){
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      remoteDescSet=true;await flushCandidates();
+    }
+  }else if(signal.type==='candidate'){
+    if(remoteDescSet&&pc){try{await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));}catch(e){}}
+    else{pendingCandidates.push(signal.candidate);}
+  }
+}
+async function flushCandidates(){
+  for(const c of pendingCandidates){try{await pc.addIceCandidate(new RTCIceCandidate(c));}catch(e){}}
+  pendingCandidates=[];
+}
+
+// ── APEL VOCAL ───────────────────────────────────────────────
+window.startCall=async function(){
+  if(!dataChannel||dataChannel.readyState!=='open')return;
+  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
+  voicePc=new RTCPeerConnection(STUN);
+  localStream.getTracks().forEach(t=>voicePc.addTrack(t,localStream));
+  voicePc.ontrack=(e)=>{document.getElementById('remoteAudio').srcObject=e.streams[0];};
+  voicePc.onicecandidate=(e)=>{if(e.candidate)dataChannel.send(JSON.stringify({__type:'call_candidate',candidate:e.candidate}));};
+  const offer=await voicePc.createOffer();
+  await voicePc.setLocalDescription(offer);
+  dataChannel.send(JSON.stringify({__type:'call_offer',sdp:voicePc.localDescription}));
+  showCallOverlay('Se apelează...');
+};
+let pendingCallMsg = null;
+let ringInterval = null;
+
+// ── SUNET RING ───────────────────────────────────────────────
+function startRing() {
+  stopRing();
+
+  function playRing() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = ctx.currentTime;
+
+    // Două bătăi scurte: DRING-DRING
+    [0, 0.45].forEach(offset => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 400;
+      osc.type = 'sine';
+
+      gain.gain.setValueAtTime(0, t + offset);
+      gain.gain.linearRampToValueAtTime(0.5, t + offset + 0.02);
+      gain.gain.setValueAtTime(0.5, t + offset + 0.3);
+      gain.gain.linearRampToValueAtTime(0, t + offset + 0.35);
+
+      osc.start(t + offset);
+      osc.stop(t + offset + 0.36);
+    });
+
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  }
+
+  playRing();
+  ringInterval = setInterval(playRing, 4000); // pauză lungă între DRING-DRING
+}
+function stopRing() {
+  if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
+}
+// ─────────────────────────────────────────────────────────────
+
+async function handleIncomingCall(msg){
+  pendingCallMsg = msg;
+  const name = document.getElementById('peerName').textContent;
+  document.getElementById('incomingAvatar').textContent = name[0].toUpperCase();
+  document.getElementById('incomingName').textContent = name;
+  document.getElementById('incomingCall').classList.add('visible');
+  startRing();
+}
+
+window.acceptCall = async function(){
+  stopRing();
+  document.getElementById('incomingCall').classList.remove('visible');
+  if(!pendingCallMsg) return;
+  const msg = pendingCallMsg; pendingCallMsg = null;
+  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
+  voicePc=new RTCPeerConnection(STUN);
+  localStream.getTracks().forEach(t=>voicePc.addTrack(t,localStream));
+  voicePc.ontrack=(e)=>{document.getElementById('remoteAudio').srcObject=e.streams[0];};
+  voicePc.onicecandidate=(e)=>{if(e.candidate)dataChannel.send(JSON.stringify({__type:'call_candidate',candidate:e.candidate}));};
+  await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+  const answer=await voicePc.createAnswer();
+  await voicePc.setLocalDescription(answer);
+  dataChannel.send(JSON.stringify({__type:'call_answer',sdp:voicePc.localDescription}));
+  showCallOverlay('Conectat');startCallTimer();
+};
+
+window.rejectCall = function(){
+  stopRing();
+  document.getElementById('incomingCall').classList.remove('visible');
+  pendingCallMsg = null;
+  if(dataChannel&&dataChannel.readyState==='open'){
+    try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}
+  }
+};
+function showCallOverlay(status){
+  const name=document.getElementById('peerName').textContent;
+  document.getElementById('callAvatar').textContent=name[0].toUpperCase();
+  document.getElementById('callName').textContent=name;
+  document.getElementById('callStatus').textContent=status;
+  document.getElementById('callTimer').style.display='none';
+  document.getElementById('callOverlay').classList.add('visible');
+}
+function startCallTimer(){
+  callSeconds=0;
+  document.getElementById('callTimer').style.display='block';
+  if(callTimerInterval)clearInterval(callTimerInterval);
+  callTimerInterval=setInterval(()=>{
+    callSeconds++;
+    const m=String(Math.floor(callSeconds/60)).padStart(2,'0');
+    const s=String(callSeconds%60).padStart(2,'0');
+    document.getElementById('callTimer').textContent=m+':'+s;
+  },1000);
+}
+window.endCall=function(fromRemote){
+  stopRing();
+  if(!fromRemote&&dataChannel&&dataChannel.readyState==='open'){try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}}
+  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+  if(voicePc){voicePc.close();voicePc=null;}
+  if(callTimerInterval){clearInterval(callTimerInterval);callTimerInterval=null;}
+  isMuted=false;pendingCallMsg=null;
+  document.getElementById('callOverlay').classList.remove('visible');
+  document.getElementById('incomingCall').classList.remove('visible');
+  document.getElementById('remoteAudio').srcObject=null;
+};
+window.toggleMute=function(){
+  if(!localStream)return;
+  isMuted=!isMuted;
+  localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
+  document.getElementById('muteBtn').textContent=isMuted?'🔇':'🎤';
+  document.getElementById('muteBtn').classList.toggle('muted',isMuted);
+};
+
+// ── MESAJE ───────────────────────────────────────────────────
+window.sendMessage=function(){
+  const input=document.getElementById('msgInput');
+  const text=input.value.trim();
+  if(!text||!dataChannel||dataChannel.readyState!=='open')return;
+  dataChannel.send(text);addMessage(text,true);
+  input.value='';input.style.height='auto';
+};
+function addMessage(text,isMine){
+  if(!isMine && navigator.vibrate) navigator.vibrate([60]);
+  const msgs=document.getElementById('messages');
+  const now=new Date().toLocaleTimeString('ro',{hour:'2-digit',minute:'2-digit'});
+  const row=document.createElement('div');
+  row.className='msg-row '+(isMine?'mine':'theirs');
+  row.innerHTML=`<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'}">
+    <div class="msg-time">${now}</div><div class="msg-bubble">${esc(text)}</div></div>`;
+  msgs.appendChild(row);msgs.scrollTop=msgs.scrollHeight;
+}
+function addSystemMsg(text){
+  const msgs=document.getElementById('messages');
+  const div=document.createElement('div');
+  div.className='system-msg';div.textContent=text;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+
+// ── UI ───────────────────────────────────────────────────────
+window.initiateConnection=async function(){
+  const input=document.getElementById('targetIdInput').value.trim().toUpperCase();
+  if(input.length!==2||input===myId){document.getElementById('targetIdInput').style.borderColor='var(--danger)';return;}
+  peerId=input;isInitiator=true;pendingCandidates=[];remoteDescSet=false;
+  showConnectStatus('Trimit invitație...');
+  createPC(peerId);
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await sendSignal(peerId,{type:'offer',sdp:pc.localDescription});
+  showConnectStatus('Aștept răspuns...');
+  setPeerInfo(peerId);showApp();closeConnectModal();
+};
+window.openConnectModal=()=>document.getElementById('connectModal').classList.add('visible');
+window.closeConnectModal=()=>{
+  document.getElementById('connectModal').classList.remove('visible');
+  document.getElementById('connectStatus').style.display='none';
+  document.getElementById('targetIdInput').value='';
+  document.getElementById('targetIdInput').style.borderColor='';
+};
+window.backToSplash=()=>{
+  endCall(true);
+  if(pc){pc.close();pc=null;}
+  if(dataChannel){dataChannel.close();dataChannel=null;}
+  peerId=null;isInitiator=false;remoteDescSet=false;pendingCandidates=[];
+  document.getElementById('messages').innerHTML='';
+  document.getElementById('sendBtn').disabled=true;
+  document.getElementById('callBtn').disabled=true;
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('splash').classList.remove('hidden');
+  renderSplashContacts();
+};
+window.handleKey=(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();window.sendMessage();}};
+window.autoResize=(el)=>{el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';};
+window.toggleDebug=function(){const p=document.getElementById('debugPanel');p.style.display=p.style.display==='none'?'block':'none';};
+
+function showApp(){
+  document.getElementById('splash').classList.add('hidden');
+  document.getElementById('app').classList.add('visible');
+  statusBar.style.display='none';
+}
+function setPeerInfo(id){
+  const contact=getContacts().find(c=>c.id===id);
+  const name=contact?contact.name:'Peer '+id;
+  document.getElementById('peerAvatar').textContent=name[0].toUpperCase();
+  document.getElementById('peerName').textContent=name;
+}
+function showConnectStatus(text){
+  document.getElementById('connectStatus').style.display='flex';
+  document.getElementById('connectStatusText').textContent=text;
+}
+function updateStatus(state){
+  const dot=document.getElementById('statusDot');
+  const text=document.getElementById('statusText');
+  const map={connected:{label:'Conectat P2P',online:true},connecting:{label:'Se conectează...',online:false},disconnected:{label:'Deconectat',online:false},failed:{label:'Eșuat',online:false}};
+  const s=map[state]||{label:state,online:false};
+  text.textContent=s.label;
+  dot.className='status-dot'+(s.online?' online':'');
+}
+
+// Service Worker
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js')
+    .then(()=>dbg('SW înregistrat'))
+    .catch(e=>dbg('SW eroare: '+e.message));
+}
+</script>
+</body>
+</html>
