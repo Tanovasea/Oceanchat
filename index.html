@@ -111,6 +111,20 @@
   .add-contact-form{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:14px}
   .add-contact-row{display:flex;gap:8px}
   .add-contact-row .input-field{font-size:14px;letter-spacing:1px;flex:1}
+  /* APEL VOCAL */
+  #callOverlay{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:32px}
+  #callOverlay.visible{display:flex}
+  .call-avatar{width:90px;height:90px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--wave);border:3px solid var(--wave);animation:callPulse 1.5s ease-in-out infinite}
+  @keyframes callPulse{0%,100%{box-shadow:0 0 0 0 rgba(79,142,247,.4)}50%{box-shadow:0 0 0 16px rgba(79,142,247,0)}}
+  .call-name{font-size:22px;font-weight:600}
+  .call-status{font-size:14px;color:var(--text-dim)}
+  .call-timer{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--pulse)}
+  .call-actions{display:flex;gap:24px}
+  .call-btn{width:64px;height:64px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;transition:all .2s}
+  .call-btn-end{background:var(--danger)}
+  .call-btn-mute{background:var(--surface);border:1px solid var(--border)}
+  .call-btn-mute.muted{background:var(--wave-dim);border-color:var(--wave)}
+  audio#remoteAudio{display:none}
 </style>
 </head>
 <body>
@@ -155,10 +169,10 @@
       </div>
     </div>
     <button class="icon-btn" onclick="toggleDebug()" title="Debug">🔍</button>
+    <button class="icon-btn" id="callBtn" onclick="startCall()" title="Apel vocal">🎙️</button>
     <button class="icon-btn" onclick="backToSplash()">✕</button>
   </div>
   <div id="messages">
-    <div class="system-msg">🌊 Conexiune P2P directă — mesajele nu trec prin niciun server</div>
   </div>
   <div class="input-area">
     <textarea id="msgInput" placeholder="Scrie un mesaj..." rows="1"
@@ -188,6 +202,19 @@
 </div>
 
 <div id="status-bar">⏳ Se inițializează...</div>
+<audio id="remoteAudio" autoplay></audio>
+
+<!-- APEL VOCAL OVERLAY -->
+<div id="callOverlay">
+  <div class="call-avatar" id="callAvatar">?</div>
+  <div class="call-name" id="callName">--</div>
+  <div class="call-status" id="callStatus">Se apelează...</div>
+  <div class="call-timer" id="callTimer" style="display:none">00:00</div>
+  <div class="call-actions">
+    <button class="call-btn call-btn-mute" id="muteBtn" onclick="toggleMute()" title="Mute">🎤</button>
+    <button class="call-btn call-btn-end" onclick="endCall(false)" title="Închide">📵</button>
+  </div>
+</div>
 
 <!-- MODAL ADAUGĂ CONTACT -->
 <div id="contactsModal">
@@ -477,15 +504,54 @@ function setupChannel(ch) {
   ch.onopen = () => {
     updateStatus('connected');
     document.getElementById('sendBtn').disabled = false;
-    addSystemMsg('✅ Conectat P2P direct! Mesajele zboară prin oceanul de energie 🌊');
+    document.getElementById('callBtn').disabled = false;
     cleanSignals();
   };
   ch.onclose = () => {
     updateStatus('disconnected');
     document.getElementById('sendBtn').disabled = true;
+    document.getElementById('callBtn').disabled = true;
     addSystemMsg('🔌 Conexiunea s-a închis.');
+    endCall();
   };
-  ch.onmessage = (e) => addMessage(e.data, false);
+  ch.onmessage = async (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.__type === 'call_offer') {
+        // Primim offer cu SDP
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+        } catch(err) { addSystemMsg('❌ Nu s-a putut accesa microfonul.'); return; }
+        voicePc = new RTCPeerConnection(STUN);
+        localStream.getTracks().forEach(t => voicePc.addTrack(t, localStream));
+        voicePc.ontrack = (ev) => { document.getElementById('remoteAudio').srcObject = ev.streams[0]; };
+        voicePc.onicecandidate = (ev) => {
+          if (ev.candidate) dataChannel.send(JSON.stringify({__type:'call_candidate', candidate:ev.candidate}));
+        };
+        await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        const answer = await voicePc.createAnswer();
+        await voicePc.setLocalDescription(answer);
+        dataChannel.send(JSON.stringify({__type:'call_answer', sdp:voicePc.localDescription}));
+        showCallOverlay('Conectat');
+        startCallTimer();
+        return;
+      }
+      if (msg.__type === 'call_answer') {
+        if (voicePc) {
+          await voicePc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          document.getElementById('callStatus').textContent = 'Conectat';
+          startCallTimer();
+        }
+        return;
+      }
+      if (msg.__type === 'call_candidate') {
+        if (voicePc) { try { await voicePc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch(err){} }
+        return;
+      }
+      if (msg.__type === 'call_end') { endCall(true); return; }
+    } catch(err) {}
+    addMessage(e.data, false);
+  };
 }
 
 async function handleSignal(fromPeer, signal) {
@@ -580,11 +646,14 @@ window.closeConnectModal = () => {
   document.getElementById('targetIdInput').style.borderColor = '';
 };
 window.backToSplash = () => {
+  endCall();
   if (pc) { pc.close(); pc = null; }
   if (dataChannel) { dataChannel.close(); dataChannel = null; }
   peerId = null; isInitiator = false;
-  document.getElementById('messages').innerHTML = '<div class="system-msg">🌊 Conexiune P2P directă — mesajele nu trec prin niciun server</div>';
+  remoteDescSet = false; pendingCandidates = [];
+  document.getElementById('messages').innerHTML = '';
   document.getElementById('sendBtn').disabled = true;
+  document.getElementById('callBtn').disabled = true;
   document.getElementById('app').classList.remove('visible');
   document.getElementById('splash').classList.remove('hidden');
   renderSplashContacts();
@@ -608,7 +677,76 @@ function showConnectStatus(text) {
   document.getElementById('connectStatus').style.display = 'flex';
   document.getElementById('connectStatusText').textContent = text;
 }
-function updateStatus(state) {
+// ── APEL VOCAL ───────────────────────────────────────────────
+let localStream = null;
+let callTimerInterval = null;
+let callSeconds = 0;
+let isMuted = false;
+let voicePc = null;
+
+window.startCall = async function() {
+  if (!dataChannel || dataChannel.readyState !== 'open') return;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+  } catch(e) {
+    addSystemMsg('❌ Nu s-a putut accesa microfonul.');
+    return;
+  }
+  voicePc = new RTCPeerConnection(STUN);
+  localStream.getTracks().forEach(t => voicePc.addTrack(t, localStream));
+  voicePc.ontrack = (e) => {
+    document.getElementById('remoteAudio').srcObject = e.streams[0];
+  };
+  voicePc.onicecandidate = (e) => {
+    if (e.candidate) dataChannel.send(JSON.stringify({__type:'call_candidate', candidate:e.candidate}));
+  };
+  const offer = await voicePc.createOffer();
+  await voicePc.setLocalDescription(offer);
+  dataChannel.send(JSON.stringify({__type:'call_offer', sdp:voicePc.localDescription}));
+  showCallOverlay('Se apelează...');
+};
+
+function showCallOverlay(status) {
+  const name = document.getElementById('peerName').textContent;
+  document.getElementById('callAvatar').textContent = name[0].toUpperCase();
+  document.getElementById('callName').textContent = name;
+  document.getElementById('callStatus').textContent = status;
+  document.getElementById('callTimer').style.display = 'none';
+  document.getElementById('callOverlay').classList.add('visible');
+}
+
+function startCallTimer() {
+  callSeconds = 0;
+  document.getElementById('callTimer').style.display = 'block';
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+    const s = String(callSeconds%60).padStart(2,'0');
+    document.getElementById('callTimer').textContent = m + ':' + s;
+  }, 1000);
+}
+
+window.endCall = function(fromRemote) {
+  if (!fromRemote && dataChannel && dataChannel.readyState === 'open') {
+    try { dataChannel.send(JSON.stringify({__type:'call_end'})); } catch(e){}
+  }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (voicePc) { voicePc.close(); voicePc = null; }
+  if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+  isMuted = false;
+  document.getElementById('callOverlay').classList.remove('visible');
+  document.getElementById('remoteAudio').srcObject = null;
+};
+
+window.toggleMute = function() {
+  if (!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  const btn = document.getElementById('muteBtn');
+  btn.textContent = isMuted ? '🔇' : '🎤';
+  btn.classList.toggle('muted', isMuted);
+};
+// ─────────────────────────────────────────────────────────────
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
   const map = {connected:{label:'Conectat P2P direct',online:true},connecting:{label:'Se conectează...',online:false},disconnected:{label:'Deconectat',online:false},failed:{label:'Eșuat',online:false}};
