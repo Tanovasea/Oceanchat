@@ -2,7 +2,7 @@
 <html lang="ro">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0a0a0f">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -20,17 +20,21 @@
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow:hidden;position:fixed;width:100%}
-  #splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);gap:24px;z-index:100;transition:opacity .5s}
+  #splash{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);z-index:100;transition:opacity .5s;overflow:hidden}
   #splash.hidden{opacity:0;pointer-events:none}
-  .ocean-icon{width:80px;height:80px;position:relative}
-  .ocean-ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--wave);animation:ripple 2s ease-out infinite}
-  .ocean-ring:nth-child(2){animation-delay:.6s}
-  .ocean-ring:nth-child(3){animation-delay:1.2s}
-  .ocean-core{position:absolute;inset:24px;background:var(--wave);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px}
-  @keyframes ripple{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.8);opacity:0}}
-  .splash-title{font-size:28px;font-weight:600}
-  .splash-title span{color:var(--wave)}
-  .splash-sub{font-size:13px;color:var(--text-dim);text-align:center;max-width:260px;line-height:1.6}
+  .splash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .splash-header-left{display:flex;align-items:center;gap:10px}
+  .splash-logo{font-size:22px;font-weight:600}
+  .splash-logo span{color:var(--wave)}
+  .my-id-chip{background:var(--wave-dim);border-radius:20px;padding:4px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--pulse);font-weight:500;cursor:pointer;border:1px solid var(--wave-dim);transition:all .2s}
+  .my-id-chip:hover{border-color:var(--wave)}
+  .splash-contacts{flex:1;overflow-y:auto;padding:16px}
+  .splash-contacts-title{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 20px;color:var(--text-dim);text-align:center}
+  .empty-state-icon{font-size:48px;opacity:.4}
+  .empty-state-text{font-size:14px;line-height:1.6}
+  .splash-fab{position:absolute;bottom:24px;right:20px;width:56px;height:56px;border-radius:50%;background:var(--wave);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 20px rgba(79,142,247,.4);transition:all .2s}
+  .splash-fab:hover{filter:brightness(1.15);transform:scale(1.05)}
   .btn{padding:12px 28px;border-radius:50px;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
   .btn-primary{background:var(--wave);color:#fff}
   .btn-primary:hover{filter:brightness(1.15)}
@@ -125,23 +129,19 @@
 </div>
 
 <div id="splash">
-  <div class="ocean-icon">
-    <div class="ocean-ring"></div>
-    <div class="ocean-ring"></div>
-    <div class="ocean-ring"></div>
-    <div class="ocean-core">🌊</div>
+  <div class="splash-header">
+    <div class="splash-header-left">
+      <div class="splash-logo">Ocean<span>Chat</span> 🌊</div>
+    </div>
+    <div class="my-id-chip" onclick="copyMyId()" title="Apasă să copiezi ID-ul tău">
+      ID: <span id="myIdDisplay">...</span>
+    </div>
   </div>
-  <div class="splash-title">Ocean<span>Chat</span></div>
-  <div class="splash-sub">Mesaje directe, fără server.<br>Prin energia din jurul tău.</div>
-  <div class="my-id-box">
-    <div class="my-id-label">ID-ul tău</div>
-    <div class="my-id-value" id="myIdDisplay">...</div>
-    <div class="my-id-hint">Dă-l celui cu care vrei să vorbești</div>
-    <button class="btn btn-ghost" style="margin-top:10px;font-size:12px;padding:6px 16px" onclick="changeMyId()">🔄 Schimbă ID</button>
+  <div class="splash-contacts">
+    <div class="splash-contacts-title">Contacte</div>
+    <div id="splashContactsList"></div>
   </div>
-  <button class="btn btn-primary" onclick="openConnectModal()">Conectează-te</button>
-  <button class="btn btn-ghost" onclick="openContacts()">📋 Agendă</button>
-  <button class="btn btn-ghost" onclick="showWaiting()">Așteaptă conexiune</button>
+  <button class="splash-fab" onclick="openAddContact()" title="Adaugă contact">＋</button>
 </div>
 
 <div id="app">
@@ -189,21 +189,17 @@
 
 <div id="status-bar">⏳ Se inițializează...</div>
 
-<!-- AGENDĂ MODAL -->
+<!-- MODAL ADAUGĂ CONTACT -->
 <div id="contactsModal">
   <div class="contacts-box">
     <div class="contacts-header">
-      <div class="contacts-title">📋 Agendă</div>
+      <div class="contacts-title">➕ Contact nou</div>
       <button class="icon-btn" onclick="closeContacts()">✕</button>
     </div>
-    <div class="contacts-list" id="contactsList"></div>
-    <div class="add-contact-form">
-      <div style="font-size:12px;color:var(--text-dim)">Adaugă contact nou:</div>
-      <div class="add-contact-row">
-        <input type="text" class="input-field" id="newContactName" placeholder="Nume" style="letter-spacing:0;text-align:left">
-        <input type="text" class="input-field" id="newContactId" placeholder="ID" maxlength="2" oninput="this.value=this.value.toUpperCase()" style="max-width:70px">
-      </div>
-      <button class="btn btn-primary" onclick="addContact()">Adaugă</button>
+    <div class="add-contact-form" style="border-top:none;padding-top:0">
+      <input type="text" class="input-field" id="newContactName" placeholder="Nume" style="letter-spacing:0;text-align:left;font-size:15px">
+      <input type="text" class="input-field" id="newContactId" placeholder="ID (2 litere)" maxlength="2" oninput="this.value=this.value.toUpperCase()">
+      <button class="btn btn-primary" onclick="addContact()">Salvează</button>
     </div>
   </div>
 </div>
@@ -335,11 +331,15 @@ function getContacts() {
 function saveContacts(list) {
   localStorage.setItem('ocean_contacts', JSON.stringify(list));
 }
-function renderContacts() {
+
+function renderSplashContacts() {
   const list = getContacts();
-  const el = document.getElementById('contactsList');
+  const el = document.getElementById('splashContactsList');
   if (list.length === 0) {
-    el.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:16px">Niciun contact salvat</div>';
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">👥</div>
+      <div class="empty-state-text">Niciun contact încă.<br>Apasă <b>＋</b> pentru a adăuga.</div>
+    </div>`;
     return;
   }
   el.innerHTML = list.map((c, i) => `
@@ -352,6 +352,7 @@ function renderContacts() {
       <button class="contact-del" onclick="event.stopPropagation();deleteContact(${i})" title="Șterge">🗑️</button>
     </div>`).join('');
 }
+
 window.addContact = function() {
   const name = document.getElementById('newContactName').value.trim();
   const id = document.getElementById('newContactId').value.trim().toUpperCase();
@@ -362,25 +363,38 @@ window.addContact = function() {
   saveContacts(list);
   document.getElementById('newContactName').value = '';
   document.getElementById('newContactId').value = '';
-  renderContacts();
+  closeContacts();
+  renderSplashContacts();
 };
 window.deleteContact = function(i) {
+  if (!confirm('Ștergi contactul?')) return;
   const list = getContacts();
   list.splice(i, 1);
   saveContacts(list);
-  renderContacts();
+  renderSplashContacts();
 };
 window.connectToContact = function(id) {
-  closeContacts();
   document.getElementById('targetIdInput').value = id;
   openConnectModal();
 };
-window.openContacts = function() {
-  renderContacts();
+window.openAddContact = function() {
+  document.getElementById('newContactName').value = '';
+  document.getElementById('newContactId').value = '';
   document.getElementById('contactsModal').classList.add('visible');
 };
+window.openContacts = window.openAddContact;
 window.closeContacts = function() {
   document.getElementById('contactsModal').classList.remove('visible');
+};
+window.copyMyId = function() {
+  navigator.clipboard.writeText(myId).then(() => {
+    const chip = document.querySelector('.my-id-chip');
+    const orig = chip.innerHTML;
+    chip.innerHTML = '✅ Copiat!';
+    setTimeout(() => { chip.innerHTML = orig; }, 1500);
+  }).catch(() => {
+    alert('ID-ul tău: ' + myId);
+  });
 };
 // ─────────────────────────────────────────────────────────────
 
@@ -394,6 +408,7 @@ if ('serviceWorker' in navigator) {
 // INIT
 document.getElementById('myIdDisplay').textContent = myId;
 statusBar.textContent = '🌐 Conectat — ID: ' + myId;
+renderSplashContacts();
 listenForSignals();
 
 // SIGNALING
@@ -564,7 +579,6 @@ window.closeConnectModal = () => {
   document.getElementById('targetIdInput').value = '';
   document.getElementById('targetIdInput').style.borderColor = '';
 };
-window.showWaiting = () => { addSystemMsg('⏳ Aștept conexiune... ID: ' + myId); showApp(); };
 window.backToSplash = () => {
   if (pc) { pc.close(); pc = null; }
   if (dataChannel) { dataChannel.close(); dataChannel = null; }
@@ -573,6 +587,7 @@ window.backToSplash = () => {
   document.getElementById('sendBtn').disabled = true;
   document.getElementById('app').classList.remove('visible');
   document.getElementById('splash').classList.remove('hidden');
+  renderSplashContacts();
 };
 window.handleKey = (e) => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); window.sendMessage(); } };
 window.autoResize = (el) => { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; };
