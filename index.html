@@ -196,7 +196,7 @@ async function checkPassword() {
       .single();
 
     if (error || !data) {
-      errorEl.textContent = 'Eroare la verificare. Încearcă din nou.';
+      errorEl.textContent = 'Eroare: ' + (error ? error.message : 'fără date');
       input.disabled = false;
       return;
     }
