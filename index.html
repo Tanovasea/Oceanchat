@@ -265,6 +265,7 @@ async function checkPassword() {
     if (pass === data.value) {
       localStorage.setItem('ocean_auth', 'true');
       document.getElementById('passwordScreen').classList.add('hidden');
+      initApp();
     } else {
       input.classList.add('error');
       errorEl.textContent = 'Parolă incorectă.';
@@ -282,6 +283,7 @@ window.checkPassword = checkPassword;
 // Verifică dacă e deja autentificat
 if (localStorage.getItem('ocean_auth') === 'true') {
   document.getElementById('passwordScreen').classList.add('hidden');
+  initApp();
 }
 // ─────────────────────────────────────────────────────────────
 const STUN = { iceServers:[
@@ -432,11 +434,13 @@ if ('serviceWorker' in navigator) {
     .catch((e) => dbg('Service Worker eroare: ' + e.message));
 }
 
-// INIT
-document.getElementById('myIdDisplay').textContent = myId;
-statusBar.textContent = '🌐 Conectat — ID: ' + myId;
-renderSplashContacts();
-listenForSignals();
+// INIT — rulează doar după autentificare
+function initApp() {
+  document.getElementById('myIdDisplay').textContent = myId;
+  statusBar.textContent = '🌐 Conectat — ID: ' + myId;
+  renderSplashContacts();
+  listenForSignals();
+}
 
 // SIGNALING
 function listenForSignals() {
