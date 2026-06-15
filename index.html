@@ -65,6 +65,7 @@
   .contact-name{font-size:15px;font-weight:500}
   .contact-id{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
   .contact-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;padding:4px}
+  .online-dot{width:10px;height:10px;border-radius:50%;background:var(--text-dim);flex-shrink:0;transition:background .3s}
 
   /* CHAT APP */
   #app{display:none;flex-direction:column;height:100%;position:fixed;inset:0;z-index:100}
@@ -347,6 +348,16 @@ function initApp() {
   statusBar.textContent='✅ Gata — ID: '+myId;
   renderSplashContacts();
   listenForSignals();
+  // Ping online
+  setOnline();
+  setInterval(()=>{ setOnline(); updateContactsOnlineStatus(); }, 30000);
+  updateContactsOnlineStatus();
+  // Offline la închiderea paginii
+  window.addEventListener('beforeunload', ()=>setOffline());
+  window.addEventListener('visibilitychange', ()=>{
+    if(document.hidden) setOffline();
+    else setOnline();
+  });
 }
 
 // La reload dacă deja autentificat
@@ -371,6 +382,7 @@ function renderSplashContacts(){
         <div class="contact-name">${esc(c.name)}</div>
         <div class="contact-id">ID: ${c.id}</div>
       </div>
+      <div class="online-dot" id="dot-${c.id}"></div>
       <button class="contact-del" onclick="event.stopPropagation();deleteContact(${i})">🗑️</button>
     </div>`).join('');
 }
@@ -408,7 +420,28 @@ window.copyMyId=function(){
   }).catch(()=>alert('ID-ul tău: '+myId));
 };
 
-// ── SIGNALING ────────────────────────────────────────────────
+// ── INDICATOR ONLINE ─────────────────────────────────────────
+async function setOnline() {
+  await supabase.from('online_peers').upsert({peer_id: myId, last_seen: new Date().toISOString()});
+}
+async function setOffline() {
+  await supabase.from('online_peers').delete().eq('peer_id', myId);
+}
+async function isOnline(peerId) {
+  const {data} = await supabase.from('online_peers').select('last_seen').eq('peer_id', peerId).single();
+  if (!data) return false;
+  const diff = Date.now() - new Date(data.last_seen).getTime();
+  return diff < 60000; // online dacă ping în ultimul minut
+}
+async function updateContactsOnlineStatus() {
+  const list = getContacts();
+  for (const c of list) {
+    const online = await isOnline(c.id);
+    const dot = document.getElementById('dot-'+c.id);
+    if (dot) dot.style.background = online ? 'var(--online)' : 'var(--text-dim)';
+  }
+}
+// ─────────────────────────────────────────────────────────────
 function listenForSignals(){
   dbg('Ascult pentru ID: '+myId);
   supabase.channel('signals-'+myId)
@@ -440,7 +473,29 @@ function createPC(remotePeerId){
       dbg('ICE gathering complet');
     }
   };
-  pc.onconnectionstatechange=()=>{dbg('connState: '+pc.connectionState);updateStatus(pc.connectionState);};
+  pc.onconnectionstatechange=()=>{
+    dbg('connState: '+pc.connectionState);
+    updateStatus(pc.connectionState);
+    if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
+      dbg('Conexiune pierdută — reconectare în 3 secunde...');
+      setTimeout(async()=>{
+        if(!peerId) return;
+        dbg('Reconectez cu '+peerId+'...');
+        if(pc){pc.close();pc=null;}
+        if(dataChannel){dataChannel.close();dataChannel=null;}
+        pendingCandidates=[];remoteDescSet=false;
+        document.getElementById('sendBtn').disabled=true;
+        document.getElementById('callBtn').disabled=true;
+        if(isInitiator){
+          createPC(peerId);
+          const offer=await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await sendSignal(peerId,{type:'offer',sdp:pc.localDescription});
+          addSystemMsg('🔄 Se reconectează...');
+        }
+      },3000);
+    }
+  };
   pc.oniceconnectionstatechange=()=>dbg('iceState: '+pc.iceConnectionState);
   // Ascultăm track-uri audio incoming (pentru apel vocal pe același pc)
   pc.ontrack=(e)=>{
@@ -668,6 +723,22 @@ function addMessage(text,isMine){
   row.className='msg-row '+(isMine?'mine':'theirs');
   row.innerHTML=`<div style="display:flex;flex-direction:column;align-items:${isMine?'flex-end':'flex-start'}">
     <div class="msg-time">${now}</div><div class="msg-bubble">${esc(text)}</div></div>`;
+  // Copiere la apăsare lungă
+  let pressTimer;
+  row.addEventListener('touchstart',()=>{
+    pressTimer=setTimeout(()=>{
+      navigator.clipboard.writeText(text).then(()=>{
+        if(navigator.vibrate) navigator.vibrate([30,50,30]);
+        const bubble=row.querySelector('.msg-bubble');
+        const orig=bubble.style.opacity;
+        bubble.style.opacity='0.4';
+        setTimeout(()=>bubble.style.opacity=orig,300);
+        addSystemMsg('📋 Mesaj copiat!');
+      });
+    },600);
+  });
+  row.addEventListener('touchend',()=>clearTimeout(pressTimer));
+  row.addEventListener('touchmove',()=>clearTimeout(pressTimer));
   msgs.appendChild(row);msgs.scrollTop=msgs.scrollHeight;
 }
 function addSystemMsg(text){
