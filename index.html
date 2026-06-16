@@ -123,7 +123,7 @@
   #debugPanel{display:none;position:fixed;top:70px;left:0;right:0;bottom:60px;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:10px;overflow-y:auto;z-index:300;white-space:pre-wrap}
 
   /* APEL VOCAL */
-  #callOverlay{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:32px}
+  #callOverlay{display:none;position:fixed;top:70px;left:0;right:0;bottom:0;background:rgba(10,10,15,.95);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:32px}
   #callOverlay.visible{display:flex}
   .call-avatar{width:90px;height:90px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--wave);border:3px solid var(--wave);animation:callPulse 1.5s ease-in-out infinite}
   @keyframes callPulse{0%,100%{box-shadow:0 0 0 0 rgba(79,142,247,.4)}50%{box-shadow:0 0 0 16px rgba(79,142,247,0)}}
