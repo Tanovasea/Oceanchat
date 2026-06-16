@@ -74,7 +74,7 @@
   .peer-avatar{width:38px;height:38px;border-radius:50%;background:var(--wave-dim);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--wave);flex-shrink:0}
   .peer-info{flex:1;min-width:0}
   .peer-name{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .peer-status{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:2px}
+  .peer-status{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap;row-gap:2px}
   .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);transition:background .3s}
   .status-dot.online{background:var(--online);box-shadow:0 0 6px var(--online)}
   .conn-type-badge{font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;font-weight:600;white-space:nowrap}
@@ -327,7 +327,7 @@ function updateConnTypeBadge(viaTurn){
   const b=document.getElementById('connTypeBadge');
   if(!b)return;
   b.className='conn-type-badge '+(viaTurn?'relay':'direct');
-  b.textContent=viaTurn?'🔴 Conectare cu TURN':'🟢 Conectare directă';
+  b.textContent=viaTurn?'🔴 TURN':'🟢 Direct';
 }
 function hideConnTypeBadge(){
   const b=document.getElementById('connTypeBadge');
