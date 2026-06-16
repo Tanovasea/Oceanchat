@@ -276,7 +276,7 @@ const statusBar = document.getElementById('status-bar');
 let myId, peerId=null, pc=null, dataChannel=null, isInitiator=false;
 let pendingCandidates=[], remoteDescSet=false;
 let localStream=null, voicePc=null, callTimerInterval=null, callSeconds=0, isMuted=false;
-let pendingCallMsg=null, ringInterval=null;
+let pendingCallMsg=null, ringInterval=null, statsInterval=null;
 
 // ── UTILITĂȚI ────────────────────────────────────────────────
 function genId() {
@@ -299,6 +299,24 @@ function dbg(msg){
   const p=document.getElementById('debugPanel');
   p.textContent+=`[${new Date().toLocaleTimeString('ro')}] ${msg}\n`;
   p.scrollTop=p.scrollHeight;
+}
+async function logActivePair(label){
+  if(!pc)return;
+  try{
+    const stats=await pc.getStats();
+    let found=false;
+    stats.forEach(report=>{
+      if(report.type==='candidate-pair'&&report.state==='succeeded'&&(report.nominated||report.selected)){
+        found=true;
+        const local=stats.get(report.localCandidateId);
+        const remote=stats.get(report.remoteCandidateId);
+        const lT=local?local.candidateType:'?', lP=local?local.protocol:'?';
+        const rT=remote?remote.candidateType:'?', rP=remote?remote.protocol:'?';
+        dbg(`PERECHE ACTIVĂ${label?' '+label:''}: local=${lT}/${lP} ↔ remote=${rT}/${rP} | tx=${report.bytesSent||0}B rx=${report.bytesReceived||0}B`);
+      }
+    });
+    if(!found)dbg(`PERECHE ACTIVĂ${label?' '+label:''}: nicio pereche nominalizată încă`);
+  }catch(e){dbg('Eroare getStats: '+e.message);}
 }
 
 // ── PAROLA ───────────────────────────────────────────────────
@@ -481,6 +499,7 @@ function createPC(remotePeerId){
   pc.onconnectionstatechange=()=>{
     dbg('connState: '+pc.connectionState);
     updateStatus(pc.connectionState);
+    if(pc.connectionState==='connected'){logActivePair();}
     if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
       dbg('Conexiune pierdută — reconectare în 3 secunde...');
       setTimeout(async()=>{
@@ -586,6 +605,8 @@ window.startCall=async function(){
   await pc.setLocalDescription(offer);
   dataChannel.send(JSON.stringify({__type:'call_offer',sdp:pc.localDescription}));
   showCallOverlay('Se apelează...');
+  if(statsInterval)clearInterval(statsInterval);
+  statsInterval=setInterval(()=>logActivePair('(apel)'),5000);
 };
 
 async function handleIncomingCall(msg){
@@ -612,6 +633,8 @@ window.acceptCall=async function(){
   // Trimitem answer prin dataChannel
   dataChannel.send(JSON.stringify({__type:'call_accept',sdp:pc.localDescription}));
   showCallOverlay('Conectat');startCallTimer();
+  if(statsInterval)clearInterval(statsInterval);
+  statsInterval=setInterval(()=>logActivePair('(apel)'),5000);
 };
 
 window.rejectCall=function(){
@@ -693,6 +716,7 @@ function startCallTimer(){
 }
 window.endCall=function(fromRemote){
   stopRing();
+  if(statsInterval){clearInterval(statsInterval);statsInterval=null;}
   if(!fromRemote&&dataChannel&&dataChannel.readyState==='open'){try{dataChannel.send(JSON.stringify({__type:'call_end'}));}catch(e){}}
   if(localStream){
     localStream.getTracks().forEach(t=>{t.stop();try{pc&&pc.getSenders().forEach(s=>{if(s.track===t)pc.removeTrack(s);});}catch(e){}});
