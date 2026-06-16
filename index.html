@@ -77,6 +77,9 @@
   .peer-status{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:2px}
   .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);transition:background .3s}
   .status-dot.online{background:var(--online);box-shadow:0 0 6px var(--online)}
+  .conn-type-badge{font-size:10px;padding:2px 8px;border-radius:10px;margin-left:4px;font-weight:600;white-space:nowrap}
+  .conn-type-badge.direct{background:rgba(0,230,118,.15);color:var(--online)}
+  .conn-type-badge.relay{background:rgba(255,71,87,.15);color:var(--danger)}
   #messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
   .msg-row{display:flex;align-items:flex-end;gap:8px}
   .msg-row.mine{flex-direction:row-reverse}
@@ -178,6 +181,7 @@
       <div class="peer-status">
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">Se conectează...</span>
+        <span id="connTypeBadge" class="conn-type-badge"></span>
       </div>
     </div>
     <button class="icon-btn" onclick="toggleDebug()" title="Debug">🔍</button>
@@ -313,10 +317,21 @@ async function logActivePair(label){
         const lT=local?local.candidateType:'?', lP=local?local.protocol:'?';
         const rT=remote?remote.candidateType:'?', rP=remote?remote.protocol:'?';
         dbg(`PERECHE ACTIVĂ${label?' '+label:''}: local=${lT}/${lP} ↔ remote=${rT}/${rP} | tx=${report.bytesSent||0}B rx=${report.bytesReceived||0}B`);
+        updateConnTypeBadge(lT==='relay'||rT==='relay');
       }
     });
     if(!found)dbg(`PERECHE ACTIVĂ${label?' '+label:''}: nicio pereche nominalizată încă`);
   }catch(e){dbg('Eroare getStats: '+e.message);}
+}
+function updateConnTypeBadge(viaTurn){
+  const b=document.getElementById('connTypeBadge');
+  if(!b)return;
+  b.className='conn-type-badge '+(viaTurn?'relay':'direct');
+  b.textContent=viaTurn?'🔴 Conectare cu TURN':'🟢 Conectare directă';
+}
+function hideConnTypeBadge(){
+  const b=document.getElementById('connTypeBadge');
+  if(b){b.className='conn-type-badge';b.textContent='';}
 }
 
 // ── PAROLA ───────────────────────────────────────────────────
@@ -520,7 +535,14 @@ function createPC(remotePeerId){
       },3000);
     }
   };
-  pc.oniceconnectionstatechange=()=>dbg('iceState: '+pc.iceConnectionState);
+  pc.oniceconnectionstatechange=()=>{
+    dbg('iceState: '+pc.iceConnectionState);
+    // ICE e adesea mai de încredere decât connectionState agregat —
+    // dacă ICE zice conectat/complet, corectăm UI-ul chiar dacă connState a rămas în urmă
+    if(pc.iceConnectionState==='connected'||pc.iceConnectionState==='completed'){
+      updateStatus('connected');
+    }
+  };
   // Ascultăm track-uri audio incoming (pentru apel vocal pe același pc)
   pc.ontrack=(e)=>{
     dbg('Track primit: '+e.track.kind);
@@ -566,7 +588,7 @@ function setupChannel(ch){
 }
 async function handleSignal(fromPeer,signal){
   if(signal.type==='offer'){
-    peerId=fromPeer;isInitiator=false;pendingCandidates=[];remoteDescSet=false;
+    peerId=fromPeer;isInitiator=false;pendingCandidates=[];remoteDescSet=false;hideConnTypeBadge();
     setPeerInfo(fromPeer);showApp();createPC(fromPeer);
     await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
     remoteDescSet=true;await flushCandidates();
@@ -787,7 +809,7 @@ function addSystemMsg(text){
 window.initiateConnection=async function(){
   const input=document.getElementById('targetIdInput').value.trim().toUpperCase();
   if(input.length!==2||input===myId){document.getElementById('targetIdInput').style.borderColor='var(--danger)';return;}
-  peerId=input;isInitiator=true;pendingCandidates=[];remoteDescSet=false;
+  peerId=input;isInitiator=true;pendingCandidates=[];remoteDescSet=false;hideConnTypeBadge();
   showConnectStatus('Trimit invitație...');
   createPC(peerId);
   const offer=await pc.createOffer();
@@ -807,7 +829,7 @@ window.backToSplash=()=>{
   endCall(true);
   if(pc){pc.close();pc=null;}
   if(dataChannel){dataChannel.close();dataChannel=null;}
-  peerId=null;isInitiator=false;remoteDescSet=false;pendingCandidates=[];
+  peerId=null;isInitiator=false;remoteDescSet=false;pendingCandidates=[];hideConnTypeBadge();
   document.getElementById('messages').innerHTML='';
   document.getElementById('sendBtn').disabled=true;
   document.getElementById('callBtn').disabled=true;
