@@ -414,6 +414,7 @@ async function checkPassword() {
     }
   } catch(e){errorEl.textContent='Eroare de rețea.';input.disabled=false;}
 }
+window.checkPassword=checkPassword;
 window.openPassModal=function(){
   document.getElementById('newPassInput').value='';
   document.getElementById('passModalMsg').textContent='';
