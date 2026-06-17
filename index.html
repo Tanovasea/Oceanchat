@@ -278,12 +278,15 @@
 </div>
 
 <script>
-// Capcană globală de erori — afișează pe ecran orice problemă JS,
-// inclusiv eșecuri de încărcare a modulului (import esm.sh etc.)
+// Capcană globală de erori — DOAR în mod debug (adaugă ?debug la URL).
+// Pentru utilizatori obișnuiți rămâne invizibilă.
+var __DEBUG__ = location.search.indexOf('debug') !== -1;
 window.addEventListener('error', function(e){
+  if(!__DEBUG__) return;
   showFatalError((e.error&&e.error.stack)?e.error.stack:(e.message+' @ '+(e.filename||'?')+':'+e.lineno));
 });
 window.addEventListener('unhandledrejection', function(e){
+  if(!__DEBUG__) return;
   showFatalError('Promise: '+(e.reason&&e.reason.message?e.reason.message:JSON.stringify(e.reason)));
 });
 function showFatalError(txt){
