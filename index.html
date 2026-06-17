@@ -277,6 +277,26 @@
   </div>
 </div>
 
+<script>
+// Capcană globală de erori — afișează pe ecran orice problemă JS,
+// inclusiv eșecuri de încărcare a modulului (import esm.sh etc.)
+window.addEventListener('error', function(e){
+  showFatalError((e.error&&e.error.stack)?e.error.stack:(e.message+' @ '+(e.filename||'?')+':'+e.lineno));
+});
+window.addEventListener('unhandledrejection', function(e){
+  showFatalError('Promise: '+(e.reason&&e.reason.message?e.reason.message:JSON.stringify(e.reason)));
+});
+function showFatalError(txt){
+  let d=document.getElementById('fatalErr');
+  if(!d){
+    d=document.createElement('div');
+    d.id='fatalErr';
+    d.style.cssText='position:fixed;top:0;left:0;right:0;background:#b00;color:#fff;font:12px monospace;padding:10px;z-index:99999;white-space:pre-wrap;max-height:50vh;overflow:auto';
+    document.body.appendChild(d);
+  }
+  d.textContent+=txt+'\n\n';
+}
+</script>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
