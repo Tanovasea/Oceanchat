@@ -163,7 +163,10 @@
 <div id="splash" class="hidden">
   <div class="splash-header">
     <div class="splash-logo">Ocean<span>Chat</span> 🌊</div>
-    <div class="my-id-chip" onclick="copyMyId()">ID: <span id="myIdDisplay">...</span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="my-id-chip" onclick="copyMyId()">ID: <span id="myIdDisplay">...</span></div>
+      <div class="my-id-chip" onclick="openPassModal()" title="Schimbă parola" style="cursor:pointer">🔑</div>
+    </div>
   </div>
   <div class="splash-contacts">
     <div class="splash-contacts-title">Contacte</div>
@@ -198,6 +201,20 @@
 
 <!-- DEBUG -->
 <div id="debugPanel"></div>
+
+<!-- MODAL SCHIMBARE PAROLĂ -->
+<div id="passModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🔑 Schimbă parola</div>
+    <div class="modal-sub">Scrie parola nouă, apoi copiază hash-ul și pune-l în Supabase (tabela app_config → access_password).</div>
+    <input type="text" class="input-field" id="newPassInput" placeholder="parola nouă" autocomplete="off">
+    <div id="passModalMsg" style="font-size:13px;min-height:18px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closePassModal()">Închide</button>
+      <button class="btn btn-primary" onclick="copyNewPassHash()">Copiază hash</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL CONECTARE -->
 <div id="connectModal" class="modal-overlay">
@@ -377,7 +394,22 @@ async function checkPassword() {
     }
   } catch(e){errorEl.textContent='Eroare de rețea.';input.disabled=false;}
 }
-window.checkPassword=checkPassword;
+window.openPassModal=function(){
+  document.getElementById('newPassInput').value='';
+  document.getElementById('passModalMsg').textContent='';
+  document.getElementById('passModal').classList.add('visible');
+};
+window.closePassModal=function(){
+  document.getElementById('passModal').classList.remove('visible');
+};
+window.copyNewPassHash=async function(){
+  const pass=document.getElementById('newPassInput').value.trim();
+  const msg=document.getElementById('passModalMsg');
+  if(!pass){msg.style.color='var(--danger)';msg.textContent='Scrie parola mai întâi.';return;}
+  const hash=await sha256(pass);
+  try{await navigator.clipboard.writeText(hash);msg.style.color='lime';msg.textContent='✅ Hash copiat! Pune-l în Supabase → app_config.';}
+  catch(e){msg.style.color='lime';msg.textContent='Hash: '+hash;}
+};
 
 // ── INIT ─────────────────────────────────────────────────────
 function initApp() {
