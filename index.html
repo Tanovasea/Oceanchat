@@ -570,7 +570,15 @@ function createPC(remotePeerId){
   pc.onconnectionstatechange=()=>{
     dbg('connState: '+pc.connectionState);
     updateStatus(pc.connectionState);
-    if(pc.connectionState==='connected'){logActivePair();cleanSignals();}
+    if(pc.connectionState==='connected'){
+      // Perechea de candidați nu e mereu nominalizată chiar în momentul 'connected'.
+      // Reîncercăm de câteva ori ca badge-ul (Direct/TURN) să apară sigur pe ambele părți.
+      logActivePair();
+      setTimeout(()=>logActivePair(),1000);
+      setTimeout(()=>logActivePair(),2000);
+      setTimeout(()=>logActivePair(),4000);
+      cleanSignals();
+    }
     if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
       dbg('Conexiune pierdută — reconectare în 3 secunde...');
       setTimeout(async()=>{
