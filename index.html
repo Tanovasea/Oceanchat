@@ -138,6 +138,7 @@
   .call-btn-cam{background:var(--surface);border:1px solid var(--border)}
   .call-btn-cam.off{background:var(--wave-dim);border-color:var(--wave)}
   .call-btn-flip{background:var(--surface);border:1px solid var(--border)}
+  #remoteVideo,#localVideo{display:none}
   /* Video: remote pe tot ecranul, local mic în colț */
   #callOverlay.video-mode #remoteVideo{display:block;position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0}
   #callOverlay.video-mode #localVideo{display:block;position:absolute;top:16px;right:16px;width:96px;height:128px;object-fit:cover;border-radius:12px;border:2px solid var(--wave);z-index:2}
@@ -268,8 +269,8 @@
 
 <!-- APEL (audio + video) -->
 <div id="callOverlay">
-  <video id="remoteVideo" autoplay playsinline style="display:none"></video>
-  <video id="localVideo" autoplay playsinline muted style="display:none"></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <video id="localVideo" autoplay playsinline muted></video>
   <div class="call-avatar" id="callAvatar">?</div>
   <div class="call-name" id="callName">--</div>
   <div class="call-status" id="callStatus">Se apelează...</div>
@@ -673,10 +674,13 @@ function createPC(remotePeerId){
     if(e.track.kind==='audio'){
       document.getElementById('remoteAudio').srcObject=e.streams[0];
     } else if(e.track.kind==='video'){
-      document.getElementById('remoteVideo').srcObject=e.streams[0];
+      const rv=document.getElementById('remoteVideo');
+      rv.srcObject=e.streams[0];
       // Dacă primim video, trecem overlay-ul în mod video
       isVideoCall=true;
       setupVideoUI();
+      // Forțăm redarea (autoplay nu e garantat la srcObject dinamic)
+      rv.play().catch(err=>dbg('remoteVideo play: '+err.message));
     }
   };
   setTimeout(()=>{if(pc&&pc.connectionState!=='connected')addSystemMsg('⚠️ Conexiunea durează mult. Încearcă din nou.');},10000);
@@ -922,7 +926,9 @@ function setupVideoUI(){
   document.getElementById('flipBtn').style.display='flex';
   // Atașăm stream-ul local la previzualizare
   if(localStream){
-    document.getElementById('localVideo').srcObject=localStream;
+    const lv=document.getElementById('localVideo');
+    lv.srcObject=localStream;
+    lv.play().catch(err=>dbg('localVideo play: '+err.message));
   }
 }
 
