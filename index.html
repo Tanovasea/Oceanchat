@@ -527,7 +527,7 @@ function renderSplashContacts(){
 window.addContact=function(){
   const name=document.getElementById('newContactName').value.trim();
   const id=document.getElementById('newContactId').value.trim().toUpperCase();
-  if(!name||id.length!==2)return;
+  if(!name||!id)return;
   const list=getContacts();
   if(list.find(c=>c.id===id)){alert('ID-ul există deja!');return;}
   list.push({name,id});saveContacts(list);
@@ -916,7 +916,7 @@ function addSystemMsg(text){
 // ── UI ───────────────────────────────────────────────────────
 window.initiateConnection=async function(){
   const input=document.getElementById('targetIdInput').value.trim().toUpperCase();
-  if(input.length!==2||input===myId){document.getElementById('targetIdInput').style.borderColor='var(--danger)';return;}
+  if(!input||input===myId){document.getElementById('targetIdInput').style.borderColor='var(--danger)';return;}
   peerId=input;isInitiator=true;pendingCandidates=[];remoteDescSet=false;hideConnTypeBadge();
   showConnectStatus('Trimit invitație...');
   createPC(peerId);
