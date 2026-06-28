@@ -149,7 +149,12 @@
   <div class="pass-box">
     <div class="pass-icon">🔐</div>
     <div class="pass-title">OceanChat</div>
-    <div class="pass-sub">Introdu parola de acces</div>
+    <div class="pass-sub">Introdu ID-ul și parola de acces</div>
+    <input type="text" class="pass-input" id="idInput"
+      placeholder="ID-ul tău"
+      autocapitalize="characters" autocomplete="off"
+      style="margin-bottom:10px;font-family:'JetBrains Mono',monospace;letter-spacing:1px"
+      onkeydown="if(event.key==='Enter') checkPassword()">
     <input type="password" class="pass-input" id="passInput"
       placeholder="••••••••"
       onkeydown="if(event.key==='Enter') checkPassword()">
@@ -328,9 +333,8 @@ function genId() {
   return Array.from({length:2},()=>c[Math.floor(Math.random()*c.length)]).join('');
 }
 function getMyId() {
-  let id=localStorage.getItem('ocean_my_id');
-  if(!id){id=genId();localStorage.setItem('ocean_my_id',id);}
-  return id;
+  // ID-ul este setat la login (din ce tastează utilizatorul) și salvat local.
+  return localStorage.getItem('ocean_my_id');
 }
 function getContacts(){return JSON.parse(localStorage.getItem('ocean_contacts')||'[]');}
 function saveContacts(l){localStorage.setItem('ocean_contacts',JSON.stringify(l));}
@@ -417,17 +421,34 @@ window.generateHash = async function() {
 };
 
 async function checkPassword() {
+  const idInputEl=document.getElementById('idInput');
   const input=document.getElementById('passInput');
   const errorEl=document.getElementById('passError');
+  const myIdInput=idInputEl.value.trim().toUpperCase();
   const pass=input.value.trim();
-  if(!pass) return;
+  if(!myIdInput){errorEl.textContent='Introdu ID-ul.';return;}
+  if(!pass){errorEl.textContent='Introdu parola.';return;}
   errorEl.textContent='';
-  input.disabled=true;
+  input.disabled=true;idInputEl.disabled=true;
   try {
+    // 1) Verificăm că ID-ul e în lista permisă de pe server
+    const {data:allowed,error:allowedErr}=await supabase
+      .from('allowed_peers').select('id').eq('id',myIdInput).maybeSingle();
+    if(allowedErr){errorEl.textContent='Eroare: '+allowedErr.message;input.disabled=false;idInputEl.disabled=false;return;}
+    if(!allowed){
+      idInputEl.classList.add('error');
+      errorEl.textContent='ID necunoscut. Verifică ID-ul primit.';
+      input.disabled=false;idInputEl.disabled=false;
+      setTimeout(()=>idInputEl.classList.remove('error'),400);
+      return;
+    }
+    // 2) Verificăm parola
     const hash = await sha256(pass);
     const {data,error}=await supabase.from('app_config').select('value').eq('key','access_password').single();
-    if(error||!data){errorEl.textContent='Eroare: '+(error?error.message:'fără date');input.disabled=false;return;}
+    if(error||!data){errorEl.textContent='Eroare: '+(error?error.message:'fără date');input.disabled=false;idInputEl.disabled=false;return;}
     if(hash===data.value){
+      // Salvăm ID-ul tastat ca ID-ul acestui device
+      localStorage.setItem('ocean_my_id',myIdInput);
       localStorage.setItem('ocean_auth','true');
       document.getElementById('passwordScreen').classList.add('hidden');
       document.getElementById('splash').classList.remove('hidden');
@@ -435,10 +456,10 @@ async function checkPassword() {
     } else {
       input.classList.add('error');
       errorEl.textContent='Parolă incorectă.';
-      input.value='';input.disabled=false;
+      input.value='';input.disabled=false;idInputEl.disabled=false;
       setTimeout(()=>input.classList.remove('error'),400);
     }
-  } catch(e){errorEl.textContent='Eroare de rețea.';input.disabled=false;}
+  } catch(e){errorEl.textContent='Eroare de rețea.';input.disabled=false;idInputEl.disabled=false;}
 }
 window.checkPassword=checkPassword;
 window.openPassModal=function(){
@@ -477,8 +498,8 @@ function initApp() {
   });
 }
 
-// La reload dacă deja autentificat
-if(localStorage.getItem('ocean_auth')==='true'){
+// La reload dacă deja autentificat ȘI avem un ID salvat
+if(localStorage.getItem('ocean_auth')==='true' && localStorage.getItem('ocean_my_id')){
   document.getElementById('passwordScreen').classList.add('hidden');
   document.getElementById('splash').classList.remove('hidden');
   initApp();
