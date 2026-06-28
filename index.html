@@ -348,19 +348,42 @@ async function logActivePair(label){
   if(!pc)return;
   try{
     const stats=await pc.getStats();
-    let found=false;
+
+    // 1) Metoda cea mai sigură: pornim de la transport și luăm perechea selectată direct.
+    let pair=null;
     stats.forEach(report=>{
-      if(report.type==='candidate-pair'&&report.state==='succeeded'&&(report.nominated||report.selected)){
-        found=true;
-        const local=stats.get(report.localCandidateId);
-        const remote=stats.get(report.remoteCandidateId);
-        const lT=local?local.candidateType:'?', lP=local?local.protocol:'?';
-        const rT=remote?remote.candidateType:'?', rP=remote?remote.protocol:'?';
-        dbg(`PERECHE ACTIVĂ${label?' '+label:''}: local=${lT}/${lP} ↔ remote=${rT}/${rP} | tx=${report.bytesSent||0}B rx=${report.bytesReceived||0}B`);
-        updateConnTypeBadge(lT==='relay'||rT==='relay');
+      if(report.type==='transport'&&report.selectedCandidatePairId){
+        const p=stats.get(report.selectedCandidatePairId);
+        if(p)pair=p;
       }
     });
-    if(!found)dbg(`PERECHE ACTIVĂ${label?' '+label:''}: nicio pereche nominalizată încă`);
+
+    // 2) Dacă transportul nu ne dă perechea (browsere mai vechi), căutăm printre candidate-pairs.
+    //    Întâi una marcată nominated/selected; dacă nu există câmpul, luăm orice pereche
+    //    'succeeded' care chiar are trafic (bytes), ca să mergem și unde câmpurile lipsesc.
+    if(!pair){
+      let best=null;
+      stats.forEach(report=>{
+        if(report.type==='candidate-pair'&&report.state==='succeeded'){
+          if(report.nominated||report.selected){best=report;}
+          else if(!best&&((report.bytesSent||0)+(report.bytesReceived||0)>0)){best=report;}
+          else if(!best){best=report;}
+        }
+      });
+      pair=best;
+    }
+
+    if(pair){
+      const local=stats.get(pair.localCandidateId);
+      const remote=stats.get(pair.remoteCandidateId);
+      const lT=local?local.candidateType:'?', lP=local?local.protocol:'?';
+      const rT=remote?remote.candidateType:'?', rP=remote?remote.protocol:'?';
+      dbg(`PERECHE ACTIVĂ${label?' '+label:''}: local=${lT}/${lP} ↔ remote=${rT}/${rP} | tx=${pair.bytesSent||0}B rx=${pair.bytesReceived||0}B`);
+      // 'relay' = prin TURN. Dacă vreun capăt e relay, conexiunea trece prin TURN.
+      updateConnTypeBadge(lT==='relay'||rT==='relay');
+    }else{
+      dbg(`PERECHE ACTIVĂ${label?' '+label:''}: nicio pereche încă`);
+    }
   }catch(e){dbg('Eroare getStats: '+e.message);}
 }
 function updateConnTypeBadge(viaTurn){
