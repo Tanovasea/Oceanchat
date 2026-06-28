@@ -225,9 +225,9 @@
 <div id="connectModal" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-title">🔗 Conectează-te</div>
-    <div class="modal-sub">Introdu ID-ul persoanei (2 litere):</div>
+    <div class="modal-sub">Introdu ID-ul persoanei:</div>
     <input type="text" class="input-field" id="targetIdInput"
-      placeholder="ex: VA" maxlength="2"
+      placeholder="ID-ul persoanei" autocapitalize="characters" autocomplete="off"
       oninput="this.value=this.value.toUpperCase()">
     <div id="connectStatus" style="display:none" class="waiting-indicator">
       <div class="waiting-dot"></div><div class="waiting-dot"></div><div class="waiting-dot"></div>
@@ -250,7 +250,7 @@
     <input type="text" class="input-field" id="newContactName"
       placeholder="Nume" style="letter-spacing:0;text-align:left;font-size:15px">
     <input type="text" class="input-field" id="newContactId"
-      placeholder="ID (2 litere)" maxlength="2"
+      placeholder="ID-ul contactului" maxlength="64" autocapitalize="characters" autocomplete="off"
       oninput="this.value=this.value.toUpperCase()">
     <button class="btn btn-primary" onclick="addContact()">Salvează</button>
   </div>
