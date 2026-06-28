@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>OceanChat</title>
+<title>Ocean</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
   :root {
@@ -135,6 +135,15 @@
   .call-btn-end{background:var(--danger)}
   .call-btn-mute{background:var(--surface);border:1px solid var(--border)}
   .call-btn-mute.muted{background:var(--wave-dim);border-color:var(--wave)}
+  .call-btn-cam{background:var(--surface);border:1px solid var(--border)}
+  .call-btn-cam.off{background:var(--wave-dim);border-color:var(--wave)}
+  .call-btn-flip{background:var(--surface);border:1px solid var(--border)}
+  /* Video: remote pe tot ecranul, local mic în colț */
+  #callOverlay.video-mode #remoteVideo{display:block;position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0}
+  #callOverlay.video-mode #localVideo{display:block;position:absolute;top:16px;right:16px;width:96px;height:128px;object-fit:cover;border-radius:12px;border:2px solid var(--wave);z-index:2}
+  #callOverlay.video-mode .call-avatar,#callOverlay.video-mode .call-name{display:none}
+  #callOverlay.video-mode .call-status,#callOverlay.video-mode .call-timer{position:relative;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+  #callOverlay.video-mode .call-actions{position:relative;z-index:2}
   .call-btn-accept{background:var(--online)}
   #incomingCall{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:450;flex-direction:column;align-items:center;justify-content:center;gap:32px}
   #incomingCall.visible{display:flex}
@@ -148,7 +157,7 @@
 <div id="passwordScreen">
   <div class="pass-box">
     <div class="pass-icon">🔐</div>
-    <div class="pass-title">OceanChat</div>
+    <div class="pass-title">Ocean 🌊</div>
     <div class="pass-sub">Introdu ID-ul și parola de acces</div>
     <input type="text" class="pass-input" id="idInput"
       placeholder="ID-ul tău"
@@ -167,7 +176,7 @@
 <!-- SPLASH / AGENDĂ -->
 <div id="splash" class="hidden">
   <div class="splash-header">
-    <div class="splash-logo">Ocean<span>Chat</span> 🌊</div>
+    <div class="splash-logo">Ocean<span></span> 🌊</div>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="my-id-chip" onclick="copyMyId()">ID: <span id="myIdDisplay">...</span></div>
       <div class="my-id-chip" onclick="openPassModal()" title="Schimbă parola" style="cursor:pointer">🔑</div>
@@ -193,7 +202,8 @@
       </div>
     </div>
     <button class="icon-btn" onclick="toggleDebug()" title="Debug">🔍</button>
-    <button class="icon-btn" id="callBtn" onclick="startCall()" title="Apel vocal" disabled>🎙️</button>
+    <button class="icon-btn" id="callBtn" onclick="startCall()" title="Apel vocal" disabled>📞</button>
+    <button class="icon-btn" id="videoCallBtn" onclick="startVideoCall()" title="Apel video" disabled>📷</button>
     <button class="icon-btn" onclick="backToSplash()">✕</button>
   </div>
   <div id="messages"></div>
@@ -256,14 +266,18 @@
   </div>
 </div>
 
-<!-- APEL VOCAL -->
+<!-- APEL (audio + video) -->
 <div id="callOverlay">
+  <video id="remoteVideo" autoplay playsinline style="display:none"></video>
+  <video id="localVideo" autoplay playsinline muted style="display:none"></video>
   <div class="call-avatar" id="callAvatar">?</div>
   <div class="call-name" id="callName">--</div>
   <div class="call-status" id="callStatus">Se apelează...</div>
   <div class="call-timer" id="callTimer" style="display:none">00:00</div>
   <div class="call-actions">
     <button class="call-btn call-btn-mute" id="muteBtn" onclick="toggleMute()">🎤</button>
+    <button class="call-btn call-btn-cam" id="camBtn" onclick="toggleCam()" style="display:none">📷</button>
+    <button class="call-btn call-btn-flip" id="flipBtn" onclick="flipCam()" style="display:none">🔄</button>
     <button class="call-btn call-btn-end" onclick="endCall(false)">📵</button>
   </div>
 </div>
@@ -275,7 +289,7 @@
 <div id="incomingCall">
   <div class="incoming-ring" id="incomingAvatar">?</div>
   <div class="call-name" id="incomingName">--</div>
-  <div class="incoming-label">Apel vocal incoming</div>
+  <div class="incoming-label" id="incomingTitle">Apel vocal incoming</div>
   <div class="call-actions">
     <button class="call-btn call-btn-end" onclick="rejectCall()">📵</button>
     <button class="call-btn call-btn-accept" onclick="acceptCall()">📞</button>
@@ -326,6 +340,7 @@ let myId, peerId=null, pc=null, dataChannel=null, isInitiator=false;
 let pendingCandidates=[], remoteDescSet=false;
 let localStream=null, voicePc=null, callTimerInterval=null, callSeconds=0, isMuted=false;
 let pendingCallMsg=null, ringInterval=null, statsInterval=null;
+let isVideoCall=false, isCamOff=false, currentFacing='user';
 
 // ── UTILITĂȚI ────────────────────────────────────────────────
 function genId() {
@@ -633,6 +648,7 @@ function createPC(remotePeerId){
         pendingCandidates=[];remoteDescSet=false;
         document.getElementById('sendBtn').disabled=true;
         document.getElementById('callBtn').disabled=true;
+        document.getElementById('videoCallBtn').disabled=true;
         if(isInitiator){
           createPC(peerId);
           const offer=await pc.createOffer();
@@ -651,11 +667,16 @@ function createPC(remotePeerId){
       updateStatus('connected');
     }
   };
-  // Ascultăm track-uri audio incoming (pentru apel vocal pe același pc)
+  // Ascultăm track-uri incoming (audio + video pe același pc)
   pc.ontrack=(e)=>{
     dbg('Track primit: '+e.track.kind);
     if(e.track.kind==='audio'){
       document.getElementById('remoteAudio').srcObject=e.streams[0];
+    } else if(e.track.kind==='video'){
+      document.getElementById('remoteVideo').srcObject=e.streams[0];
+      // Dacă primim video, trecem overlay-ul în mod video
+      isVideoCall=true;
+      setupVideoUI();
     }
   };
   setTimeout(()=>{if(pc&&pc.connectionState!=='connected')addSystemMsg('⚠️ Conexiunea durează mult. Încearcă din nou.');},10000);
@@ -667,12 +688,14 @@ function setupChannel(ch){
     updateStatus('connected');
     document.getElementById('sendBtn').disabled=false;
     document.getElementById('callBtn').disabled=false;
+    document.getElementById('videoCallBtn').disabled=false;
     cleanSignals();
   };
   ch.onclose=()=>{
     updateStatus('disconnected');
     document.getElementById('sendBtn').disabled=true;
     document.getElementById('callBtn').disabled=true;
+    document.getElementById('videoCallBtn').disabled=true;
     addSystemMsg('🔌 Conexiunea s-a închis.');
     endCall(true);
   };
@@ -724,26 +747,36 @@ async function flushCandidates(){
 }
 
 // ── APEL VOCAL (pe același pc) ───────────────────────────────
-window.startCall=async function(){
+window.startCall=async function(){ await beginCall(false); };
+window.startVideoCall=async function(){ await beginCall(true); };
+
+async function beginCall(video){
   if(!dataChannel||dataChannel.readyState!=='open')return;
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
-  // Adăugăm track-ul audio pe pc-ul existent
+  isVideoCall=video;
+  const constraints = video
+    ? {audio:true, video:{facingMode:currentFacing}}
+    : {audio:true, video:false};
+  try{localStream=await navigator.mediaDevices.getUserMedia(constraints);}
+  catch(e){addSystemMsg(video?'❌ Nu s-a putut accesa camera/microfonul.':'❌ Nu s-a putut accesa microfonul.');return;}
+  // Adăugăm track-urile pe pc-ul existent
   localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  // Renegociem conexiunea cu audio inclus
+  // Renegociem conexiunea
   const offer=await pc.createOffer();
   await pc.setLocalDescription(offer);
-  dataChannel.send(JSON.stringify({__type:'call_offer',sdp:pc.localDescription}));
+  dataChannel.send(JSON.stringify({__type:'call_offer',sdp:pc.localDescription,video:video}));
   showCallOverlay('Se apelează...');
+  if(video) setupVideoUI();
   if(statsInterval)clearInterval(statsInterval);
   statsInterval=setInterval(()=>logActivePair('(apel)'),5000);
-};
+}
 
 async function handleIncomingCall(msg){
   pendingCallMsg=msg;
+  isVideoCall=!!msg.video;
   const name=document.getElementById('peerName').textContent;
   document.getElementById('incomingAvatar').textContent=name[0].toUpperCase();
   document.getElementById('incomingName').textContent=name;
+  document.getElementById('incomingTitle').textContent=isVideoCall?'Apel video':'Apel vocal';
   document.getElementById('incomingCall').classList.add('visible');
   startRing();
 }
@@ -753,9 +786,12 @@ window.acceptCall=async function(){
   document.getElementById('incomingCall').classList.remove('visible');
   if(!pendingCallMsg)return;
   const msg=pendingCallMsg;pendingCallMsg=null;
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch(e){addSystemMsg('❌ Nu s-a putut accesa microfonul.');return;}
-  // Adăugăm track-ul audio pe pc-ul existent și renegociem
+  const constraints = isVideoCall
+    ? {audio:true, video:{facingMode:currentFacing}}
+    : {audio:true, video:false};
+  try{localStream=await navigator.mediaDevices.getUserMedia(constraints);}
+  catch(e){addSystemMsg(isVideoCall?'❌ Nu s-a putut accesa camera/microfonul.':'❌ Nu s-a putut accesa microfonul.');return;}
+  // Adăugăm track-urile pe pc-ul existent și renegociem
   localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
   await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
   const answer=await pc.createAnswer();
@@ -763,6 +799,7 @@ window.acceptCall=async function(){
   // Trimitem answer prin dataChannel
   dataChannel.send(JSON.stringify({__type:'call_accept',sdp:pc.localDescription}));
   showCallOverlay('Conectat');startCallTimer();
+  if(isVideoCall) setupVideoUI();
   if(statsInterval)clearInterval(statsInterval);
   statsInterval=setInterval(()=>logActivePair('(apel)'),5000);
 };
@@ -854,6 +891,16 @@ window.endCall=function(fromRemote){
   }
   if(callTimerInterval){clearInterval(callTimerInterval);callTimerInterval=null;}
   isMuted=false;pendingCallMsg=null;
+  // Reset video
+  isVideoCall=false;isCamOff=false;
+  const overlay=document.getElementById('callOverlay');
+  overlay.classList.remove('video-mode');
+  document.getElementById('camBtn').style.display='none';
+  document.getElementById('flipBtn').style.display='none';
+  document.getElementById('camBtn').textContent='📷';
+  document.getElementById('camBtn').classList.remove('off');
+  document.getElementById('localVideo').srcObject=null;
+  document.getElementById('remoteVideo').srcObject=null;
   document.getElementById('callOverlay').classList.remove('visible');
   document.getElementById('incomingCall').classList.remove('visible');
   document.getElementById('remoteAudio').srcObject=null;
@@ -864,6 +911,49 @@ window.toggleMute=function(){
   localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
   document.getElementById('muteBtn').textContent=isMuted?'🔇':'🎤';
   document.getElementById('muteBtn').classList.toggle('muted',isMuted);
+};
+
+// ── VIDEO ────────────────────────────────────────────────────
+function setupVideoUI(){
+  const overlay=document.getElementById('callOverlay');
+  overlay.classList.add('video-mode');
+  // Afișăm butoanele de cameră
+  document.getElementById('camBtn').style.display='flex';
+  document.getElementById('flipBtn').style.display='flex';
+  // Atașăm stream-ul local la previzualizare
+  if(localStream){
+    document.getElementById('localVideo').srcObject=localStream;
+  }
+}
+
+window.toggleCam=function(){
+  if(!localStream)return;
+  isCamOff=!isCamOff;
+  localStream.getVideoTracks().forEach(t=>t.enabled=!isCamOff);
+  document.getElementById('camBtn').textContent=isCamOff?'🚫':'📷';
+  document.getElementById('camBtn').classList.toggle('off',isCamOff);
+};
+
+window.flipCam=async function(){
+  if(!localStream||!isVideoCall)return;
+  currentFacing = currentFacing==='user' ? 'environment' : 'user';
+  try{
+    // Cerem un nou stream video cu camera cealaltă
+    const newStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:currentFacing}});
+    const newTrack=newStream.getVideoTracks()[0];
+    // Înlocuim track-ul video trimis prin conexiune (fără renegociere)
+    const sender=pc.getSenders().find(s=>s.track&&s.track.kind==='video');
+    if(sender) await sender.replaceTrack(newTrack);
+    // Oprim vechiul track video și actualizăm stream-ul local
+    localStream.getVideoTracks().forEach(t=>{t.stop();localStream.removeTrack(t);});
+    localStream.addTrack(newTrack);
+    document.getElementById('localVideo').srcObject=localStream;
+    if(isCamOff)newTrack.enabled=false;
+  }catch(e){
+    dbg('Eroare flip cameră: '+e.message);
+    // revenim la facing-ul anterior dacă a eșuat
+    currentFacing = currentFacing==='user' ? 'environment' : 'user';
+  }
 };
 
 // ── MESAJE ───────────────────────────────────────────────────
@@ -941,6 +1031,7 @@ window.backToSplash=()=>{
   document.getElementById('messages').innerHTML='';
   document.getElementById('sendBtn').disabled=true;
   document.getElementById('callBtn').disabled=true;
+  document.getElementById('videoCallBtn').disabled=true;
   document.getElementById('app').classList.remove('visible');
   document.getElementById('splash').classList.remove('hidden');
   renderSplashContacts();
