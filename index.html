@@ -144,7 +144,9 @@
   #callOverlay.video-mode #localVideo{display:block;position:absolute;top:16px;right:16px;width:96px;height:128px;object-fit:cover;border-radius:12px;border:2px solid var(--wave);z-index:2}
   #callOverlay.video-mode .call-avatar,#callOverlay.video-mode .call-name{display:none}
   #callOverlay.video-mode .call-status,#callOverlay.video-mode .call-timer{position:relative;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.8)}
-  #callOverlay.video-mode .call-actions{position:relative;z-index:2}
+  #callOverlay.video-mode .call-actions{position:absolute;bottom:32px;left:0;right:0;justify-content:center;z-index:3;transition:opacity .4s ease}
+  #callOverlay.video-mode.controls-hidden .call-actions{opacity:0;pointer-events:none}
+  #callOverlay.video-mode.controls-hidden .call-status,#callOverlay.video-mode.controls-hidden .call-timer{opacity:0;transition:opacity .4s ease}
   .call-btn-accept{background:var(--online)}
   #incomingCall{display:none;position:fixed;inset:0;background:rgba(10,10,15,.95);z-index:450;flex-direction:column;align-items:center;justify-content:center;gap:32px}
   #incomingCall.visible{display:flex}
@@ -754,11 +756,21 @@ async function flushCandidates(){
 window.startCall=async function(){ await beginCall(false); };
 window.startVideoCall=async function(){ await beginCall(true); };
 
+// Constrângeri video: cerem HD 720p, dar WebRTC scade singur dacă banda nu duce
+function videoConstraints(){
+  return {
+    facingMode: currentFacing,
+    width:  { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 }
+  };
+}
+
 async function beginCall(video){
   if(!dataChannel||dataChannel.readyState!=='open')return;
   isVideoCall=video;
   const constraints = video
-    ? {audio:true, video:{facingMode:currentFacing}}
+    ? {audio:true, video:videoConstraints()}
     : {audio:true, video:false};
   try{localStream=await navigator.mediaDevices.getUserMedia(constraints);}
   catch(e){addSystemMsg(video?'❌ Nu s-a putut accesa camera/microfonul.':'❌ Nu s-a putut accesa microfonul.');return;}
@@ -791,7 +803,7 @@ window.acceptCall=async function(){
   if(!pendingCallMsg)return;
   const msg=pendingCallMsg;pendingCallMsg=null;
   const constraints = isVideoCall
-    ? {audio:true, video:{facingMode:currentFacing}}
+    ? {audio:true, video:videoConstraints()}
     : {audio:true, video:false};
   try{localStream=await navigator.mediaDevices.getUserMedia(constraints);}
   catch(e){addSystemMsg(isVideoCall?'❌ Nu s-a putut accesa camera/microfonul.':'❌ Nu s-a putut accesa microfonul.');return;}
@@ -897,8 +909,11 @@ window.endCall=function(fromRemote){
   isMuted=false;pendingCallMsg=null;
   // Reset video
   isVideoCall=false;isCamOff=false;
+  if(controlsTimer){clearTimeout(controlsTimer);controlsTimer=null;}
   const overlay=document.getElementById('callOverlay');
   overlay.classList.remove('video-mode');
+  overlay.classList.remove('controls-hidden');
+  overlay.onclick=null;
   document.getElementById('camBtn').style.display='none';
   document.getElementById('flipBtn').style.display='none';
   document.getElementById('camBtn').textContent='📷';
@@ -930,6 +945,29 @@ function setupVideoUI(){
     lv.srcObject=localStream;
     lv.play().catch(err=>dbg('localVideo play: '+err.message));
   }
+  // Butoanele dispar la inactivitate; atingerea ecranului le readuce
+  startControlsTimer();
+  overlay.onclick=(e)=>{
+    // Nu reacționăm dacă s-a apăsat direct pe un buton
+    if(e.target.closest('.call-btn'))return;
+    showControls();
+  };
+}
+
+let controlsTimer=null;
+function showControls(){
+  const overlay=document.getElementById('callOverlay');
+  overlay.classList.remove('controls-hidden');
+  startControlsTimer();
+}
+function startControlsTimer(){
+  if(controlsTimer)clearTimeout(controlsTimer);
+  controlsTimer=setTimeout(()=>{
+    const overlay=document.getElementById('callOverlay');
+    if(overlay.classList.contains('video-mode')){
+      overlay.classList.add('controls-hidden');
+    }
+  },4000);
 }
 
 window.toggleCam=function(){
@@ -945,7 +983,7 @@ window.flipCam=async function(){
   currentFacing = currentFacing==='user' ? 'environment' : 'user';
   try{
     // Cerem un nou stream video cu camera cealaltă
-    const newStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:currentFacing}});
+    const newStream=await navigator.mediaDevices.getUserMedia({video:videoConstraints()});
     const newTrack=newStream.getVideoTracks()[0];
     // Înlocuim track-ul video trimis prin conexiune (fără renegociere)
     const sender=pc.getSenders().find(s=>s.track&&s.track.kind==='video');
