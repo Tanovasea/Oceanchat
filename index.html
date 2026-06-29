@@ -449,28 +449,27 @@ async function checkPassword() {
   errorEl.textContent='';
   input.disabled=true;idInputEl.disabled=true;
   try {
-    // 1) Verificăm că ID-ul e în lista permisă de pe server
-    const {data:allowed,error:allowedErr}=await supabase
-      .from('allowed_peers').select('id').eq('id',myIdInput).maybeSingle();
-    if(allowedErr){errorEl.textContent='Eroare: '+allowedErr.message;input.disabled=false;idInputEl.disabled=false;return;}
-    if(!allowed){
-      idInputEl.classList.add('error');
-      errorEl.textContent='ID necunoscut. Verifică ID-ul primit.';
-      input.disabled=false;idInputEl.disabled=false;
-      setTimeout(()=>idInputEl.classList.remove('error'),400);
-      return;
-    }
-    // 2) Verificăm parola
-    const hash = await sha256(pass);
-    const {data,error}=await supabase.from('app_config').select('value').eq('key','access_password').single();
-    if(error||!data){errorEl.textContent='Eroare: '+(error?error.message:'fără date');input.disabled=false;idInputEl.disabled=false;return;}
-    if(hash===data.value){
-      // Salvăm ID-ul tastat ca ID-ul acestui device
-      localStorage.setItem('ocean_my_id',myIdInput);
+    // Verificarea (ID + parolă) se face pe server, prin Edge Function.
+    // Clientul nu mai atinge direct tabelele allowed_peers / app_config.
+    const passHash = await sha256(pass);
+    const res = await fetch(SUPABASE_URL + '/functions/v1/login', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ id: myIdInput, passHash })
+    });
+    const result = await res.json();
+
+    if (result.ok) {
+      localStorage.setItem('ocean_my_id', myIdInput);
       localStorage.setItem('ocean_auth','true');
       document.getElementById('passwordScreen').classList.add('hidden');
       document.getElementById('splash').classList.remove('hidden');
       initApp();
+    } else if (result.reason === 'id necunoscut') {
+      idInputEl.classList.add('error');
+      errorEl.textContent='ID necunoscut. Verifică ID-ul primit.';
+      input.disabled=false;idInputEl.disabled=false;
+      setTimeout(()=>idInputEl.classList.remove('error'),400);
     } else {
       input.classList.add('error');
       errorEl.textContent='Parolă incorectă.';
